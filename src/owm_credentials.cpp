@@ -1,10 +1,10 @@
 #include "owm_credentials.h"
 
+//these settings can be set in the web interface as well
 
-// char ssid[64] = "HP_Deskjet";
-// char password[64] = "11112222";
 char ssid[64]     = "";
 char password[64] = "";
+
 String apikey       = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
 
 //http://api.openweathermap.org/data/2.5/forecast?q=Melksham,UK&APPID=your_OWM_API_key&mode=json&units=metric&cnt=40
