@@ -144,15 +144,15 @@ void setup() {
   // Check for setup mode (button held at power-on)
   if (is_wifi_setup_requested() && String(esp_sleep_get_wakeup_cause()) == "0") {
     Serial.println("entering setup mode...");
-    run_wifi_setup_portal();
     InitialiseDisplay();
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
     drawString(10, 30, String("Setup Mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
-    drawString(10, 80, String("and open in a browser:"), LEFT);
+    drawString(10, 80, String("open settings page in a browser:"), LEFT);
     drawString(10, 100, String("http://192.168.4.1/"), LEFT);
     display.display(false);
+    run_wifi_setup_portal();
     // Will restart after setup
     while (true) delay(1000);
   }

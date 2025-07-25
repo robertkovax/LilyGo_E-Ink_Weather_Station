@@ -208,7 +208,7 @@ void handle_wifi_root() {
   form += html_input("daylight", String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24)));
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Advanced Settings</legend>";
-  form += html_input("openweathermaps api-key", eeprom_read_string(APIKEY_ADDR, 64));
+  form += html_input("apikey", eeprom_read_string(APIKEY_ADDR, 64));
   form += html_input("ntpserver", eeprom_read_string(NTPSERVER_ADDR, 32));
   form += html_input("units", eeprom_read_string(UNITS_ADDR, 8));
   form += "</fieldset>";
