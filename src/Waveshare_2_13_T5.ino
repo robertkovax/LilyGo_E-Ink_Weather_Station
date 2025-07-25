@@ -163,7 +163,7 @@ void setup() {
   InitialiseDisplay();
 
 
-  if (BatteryAbovePercentage(95)  == false) {
+  if (BatteryAbovePercentage(10)  == false) {
     Serial.println("Battery too low, stopping");
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
     drawString(10, 30, String("Critical battery level..."),  LEFT);
