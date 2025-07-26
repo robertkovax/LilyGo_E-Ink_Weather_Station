@@ -117,8 +117,8 @@ String html_input(const char* name, const String& value, bool isPassword=false, 
   String displayLabel = label ? String(label) : String(name);
   String input = displayLabel + ":<br><input type='";
   input += (isPassword ? "password" : "text");
-  input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "'> ";
-  input += "<button type='submit' name='update' value='" + String(name) + "'>Update field</button>";
+  input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'> ";
+  input += "<button type='submit' name='update' value='" + String(name) + "' style='background-color:#006699; color:white;'>Save value</button>";
   if (note) {
     input += "<br><small style='color: #555;'>" + String(note) + "</small>";
   }
@@ -141,7 +141,6 @@ const char* wifi_form_html_template = R"rawliteral(
       padding: 15px;
       color: #222;
     }
-
     .container {
       max-width: 500px;
       margin: auto;
@@ -150,20 +149,17 @@ const char* wifi_form_html_template = R"rawliteral(
       border-radius: 8px;
       box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
     }
-
     h2 {
       font-size: 20px;
       margin-bottom: 20px;
       text-align: center;
       color: #003344;
     }
-
     form {
       margin: 0;
     }
-
     button {
-      background-color: #006699;
+      background-color: #003344;
       color: white;
       border: none;
       padding: 8px 16px;
@@ -171,32 +167,40 @@ const char* wifi_form_html_template = R"rawliteral(
       font-size: 14px;
       cursor: pointer;
     }
-
     button:hover {
-      background-color: #004d73;
+      background-color: #003344;
     }
-
     .btn-group {
       text-align: center;
       margin-top: 10px;
     }
   </style>
+  <script>
+    function detectChange(input) {
+      var btn = input.nextElementSibling;
+      if (input.value !== input.getAttribute('data-original')) {
+        btn.style.backgroundColor = '#ff9800'; // orange
+      } else {
+        btn.style.backgroundColor = '#003344'; // green
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="container">
     <h2>Weather Station Settings</h2>
-
     <form action='/save' method='POST'>
       %s
     </form>
-
+    <form action='/refresh' method='POST' class="btn-group">
+      <button type='submit'>Reload saved values</button>
+    </form>
     <form action='/reboot' method='POST' class="btn-group">
-      <button type='submit'>Reboot</button>
+      <button type='submit'>Restart Weather Station</button>
     </form>
   </div>
 </body>
 </html>
-
 )rawliteral";
 
 void handle_bday_root() {
@@ -242,24 +246,34 @@ void handle_bday_save() {
 void handle_wifi_root() {
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi Settings</legend>";
-  form += html_input("ssid", eeprom_read_string(SSID_ADDR, 64));
-  form += html_input("pass", "", true);
+  String ssid_val = eeprom_read_string(SSID_ADDR, 64);
+  form += html_input("ssid", ssid_val, false, nullptr, nullptr);
+  form += html_input("pass", "", true, nullptr, nullptr);
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Geo Settings</legend>";
-  form += html_input("lat", eeprom_read_string(LAT_ADDR, 32));
-  form += html_input("lon", eeprom_read_string(LON_ADDR, 32));
-  form += html_input("city", eeprom_read_string(CITY_ADDR, 32));
-  form += html_input("country", eeprom_read_string(COUNTRY_ADDR, 8));
-  form += html_input("hemisphere", eeprom_read_string(HEMISPHERE_ADDR, 8));
-  form += html_input("timezone", eeprom_read_string(TIMEZONE_ADDR, 32), false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
-  form += html_input("gmtoffset", String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24)));
-  form += html_input("daylight", String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24)));
+  String lat_val = eeprom_read_string(LAT_ADDR, 32);
+  String lon_val = eeprom_read_string(LON_ADDR, 32);
+  String city_val = eeprom_read_string(CITY_ADDR, 32);
+  String country_val = eeprom_read_string(COUNTRY_ADDR, 8);
+  String hemisphere_val = eeprom_read_string(HEMISPHERE_ADDR, 8);
+  String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
+  String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24));
+  String daylight_val = String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24));
+  form += html_input("lat", lat_val, false, nullptr, nullptr);
+  form += html_input("lon", lon_val, false, nullptr, nullptr);
+  form += html_input("city", city_val, false, nullptr, nullptr);
+  form += html_input("country", country_val, false, nullptr, nullptr);
+  form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
+  form += html_input("timezone", timezone_val, false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
+  form += html_input("gmtoffset", gmtoffset_val, false, nullptr, nullptr);
+  form += html_input("daylight", daylight_val, false, nullptr, nullptr);
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap 2.5 API key</legend>";
-  form += html_input("apikey", eeprom_read_string(APIKEY_ADDR, 64), false, "apikey", "See <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org/api_keys</a>");
+  String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
+  form += html_input("apikey", apikey_val, false, "apikey", "See <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org/api_keys</a>");
   form += "</fieldset>";
-  char html[4096];
-  snprintf(html, sizeof(html), wifi_form_html_template, form.c_str());
+  String html = String(wifi_form_html_template);
+  html.replace("%s", form);
   wifiServer.send(200, "text/html", html);
 }
 

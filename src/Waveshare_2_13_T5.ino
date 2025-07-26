@@ -26,7 +26,7 @@
 // + re-enable sleep mode
 // - hello "name" on display startup
 // + moon clear weather icons for the nights
-// 5. birthday greeting on the day of the birthday
+// + birthday greeting on the day of the birthday
 // + update wifi credentials via wifi webserver
 // + make moon phase symbol smaller
 //- on dounble click show 4 day forecast immediately
@@ -255,7 +255,7 @@ void setup() {
     drawString(20, 20, String("Sunny B-day " + eeprom_read_string(BDAY_NAME_ADDR, 32)) + "!!!", LEFT);
     Sunny(115, 70, Large, "01");         
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    drawString(20, 105, String("press Next button to continue..."), LEFT);
+    drawString(20, 105, String("press Next to continue..."), LEFT);
     display.display(false);
     esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
     delay(500);
@@ -265,7 +265,7 @@ void setup() {
   }
 
   //update display on wakeup
-  if ((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt == 3) {
+  if (((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt == 3) && digitalRead(BUTTON_PIN)) {
     first_boot = false;
     buttonWake_cnt = 0;
     Serial.println("Show today's Weather");
@@ -275,13 +275,14 @@ void setup() {
     display.display(false);
     display.powerOff();
   }
-  if (buttonWake_cnt == 1)  {
+  if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Show next day forecast");
     ShowNextDayForecast();
     display.display(false);
     display.powerOff();
   }
-  if (buttonWake_cnt == 2)  {
+  if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
+    buttonWake_cnt = 2;
     Serial.println("Show 4 day forecast");
     Show4DayForecast();
     display.display(false);
@@ -777,9 +778,6 @@ boolean UpdateLocalTime() {
   date_str = day_output;
   date_dd_mm_str = dd_mm_output;
   time_str = time_output;
-
-  Serial.println("date_str: " + date_str);
-  Serial.println("date_dd_mm_str: " + date_dd_mm_str);
   return true;
 }
 //#########################################################################################
