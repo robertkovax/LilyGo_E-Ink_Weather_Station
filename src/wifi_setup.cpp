@@ -4,7 +4,7 @@
 #include <WebServer.h>
 #include "owm_credentials.h"
 
-#define EEPROM_SIZE 512
+#define EEPROM_SIZE 1024
 #define SSID_ADDR   0
 #define PASS_ADDR   64
 #define APIKEY_ADDR 128
@@ -22,8 +22,11 @@
 #define BUTTON_PIN 39
 #define LONG_PRESS_MS 2000
 
-#define EEPROM_MARKER_ADDR 510
+#define EEPROM_MARKER_ADDR 550
 #define EEPROM_MARKER_VALUE 0xA5
+
+#define BDAY_NAME_ADDR 492
+#define BDAY_DATE_ADDR 524
 
 WebServer wifiServer(80);
 
@@ -110,11 +113,16 @@ void load_wifi_config() {
 }
 
 // Helper to get current config value for HTML
-String html_input(const char* name, const String& value, bool isPassword=false) {
-  String input = String(name) + ":<br><input type='";
+String html_input(const char* name, const String& value, bool isPassword=false, const char* label=nullptr, const char* note=nullptr) {
+  String displayLabel = label ? String(label) : String(name);
+  String input = displayLabel + ":<br><input type='";
   input += (isPassword ? "password" : "text");
   input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "'> ";
-  input += "<button type='submit' name='update' value='" + String(name) + "'>Save</button><br><br><br>";
+  input += "<button type='submit' name='update' value='" + String(name) + "'>Update field</button>";
+  if (note) {
+    input += "<br><small style='color: #555;'>" + String(note) + "</small>";
+  }
+  input += "<br><br>";
   return input;
 }
 
@@ -191,6 +199,46 @@ const char* wifi_form_html_template = R"rawliteral(
 
 )rawliteral";
 
+void handle_bday_root() {
+  String name = eeprom_read_string(BDAY_NAME_ADDR, 32);
+  String bday = eeprom_read_string(BDAY_DATE_ADDR, 8);
+  String form = "<h2>Birthday Setup</h2>";
+  form += "<form action='/bday_save' method='POST'>";
+  form += "Name:<br><input type='text' name='bday_name' value='" + name + "'><br><br>";
+  form += "Birthday (dd.mm):<br><input type='text' name='bday_date' value='" + bday + "'><br><br>";
+  form += "<button type='submit'>Save Birthday</button>";
+  form += "</form>";
+  form += "<br><form action='/' method='GET'><button type='submit'>Back to Setup</button></form>";
+  wifiServer.send(200, "text/html", form);
+}
+
+void handle_bday_save() {
+  if (wifiServer.hasArg("bday_name") && wifiServer.hasArg("bday_date")) {
+    String name = wifiServer.arg("bday_name");
+    String bday = wifiServer.arg("bday_date");
+    EEPROM.begin(EEPROM_SIZE); // Ensure EEPROM is initialized with enough size
+    eeprom_write_string(BDAY_NAME_ADDR, name, 32);
+    eeprom_write_string(BDAY_DATE_ADDR, bday, 8);
+    EEPROM.commit();
+    Serial.println("Birthday name saved: " + name);
+    Serial.println("Birthday date saved: " + bday);
+
+    // Read back from EEPROM to ensure fields are populated with saved values
+    String saved_name = eeprom_read_string(BDAY_NAME_ADDR, 32);
+    String saved_bday = eeprom_read_string(BDAY_DATE_ADDR, 8);
+    String form = "<h2>Birthday Setup</h2>";
+    form += "<form action='/bday_save' method='POST'>";
+    form += "Name:<br><input type='text' name='bday_name' value='" + saved_name + "'><br><br>";
+    form += "Birthday (dd.mm):<br><input type='text' name='bday_date' value='" + saved_bday + "'><br><br>";
+    form += "<button type='submit'>Save Birthday</button>";
+    form += "</form>";
+    form += "<br><form action='/' method='GET'><button type='submit'>Back to Setup</button></form>";
+    wifiServer.send(200, "text/html", form);
+  } else {
+    wifiServer.send(400, "text/html", "<h2>Missing name or birthday</h2>");
+  }
+}
+
 void handle_wifi_root() {
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi Settings</legend>";
@@ -203,14 +251,12 @@ void handle_wifi_root() {
   form += html_input("city", eeprom_read_string(CITY_ADDR, 32));
   form += html_input("country", eeprom_read_string(COUNTRY_ADDR, 8));
   form += html_input("hemisphere", eeprom_read_string(HEMISPHERE_ADDR, 8));
-  form += html_input("timezone", eeprom_read_string(TIMEZONE_ADDR, 32));
+  form += html_input("timezone", eeprom_read_string(TIMEZONE_ADDR, 32), false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24)));
   form += html_input("daylight", String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24)));
   form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Advanced Settings</legend>";
-  form += html_input("apikey", eeprom_read_string(APIKEY_ADDR, 64));
-  form += html_input("ntpserver", eeprom_read_string(NTPSERVER_ADDR, 32));
-  form += html_input("units", eeprom_read_string(UNITS_ADDR, 8));
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap 2.5 API key</legend>";
+  form += html_input("apikey", eeprom_read_string(APIKEY_ADDR, 64), false, "apikey", "See <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org/api_keys</a>");
   form += "</fieldset>";
   char html[4096];
   snprintf(html, sizeof(html), wifi_form_html_template, form.c_str());
@@ -264,17 +310,9 @@ void handle_wifi_save() {
       Serial.println("Saving Hemisphere: " + wifiServer.arg("hemisphere"));
       eeprom_write_string(HEMISPHERE_ADDR, wifiServer.arg("hemisphere"), 8);
     }
-    if (field == "units" && wifiServer.hasArg("units")) {
-      Serial.println("Saving Units: " + wifiServer.arg("units"));
-      eeprom_write_string(UNITS_ADDR, wifiServer.arg("units"), 8);
-    }
     if (field == "timezone" && wifiServer.hasArg("timezone")) {
       Serial.println("Saving Timezone: " + wifiServer.arg("timezone"));
       eeprom_write_string(TIMEZONE_ADDR, wifiServer.arg("timezone"), 32);
-    }
-    if (field == "ntpserver" && wifiServer.hasArg("ntpserver")) {
-      Serial.println("Saving NTP Server: " + wifiServer.arg("ntpserver"));
-      eeprom_write_string(NTPSERVER_ADDR, wifiServer.arg("ntpserver"), 32);
     }
     if (field == "gmtoffset" && wifiServer.hasArg("gmtoffset")) {
       long gmtOffset = wifiServer.arg("gmtoffset").toInt();
@@ -310,6 +348,8 @@ void run_wifi_setup_portal() {
   wifiServer.on("/save", HTTP_POST, handle_wifi_save);
   wifiServer.on("/reboot", HTTP_POST, handle_wifi_reboot);
   wifiServer.on("/refresh", HTTP_POST, handle_wifi_refresh);
+  wifiServer.on("/bday", HTTP_GET, handle_bday_root);
+  wifiServer.on("/bday_save", HTTP_POST, handle_bday_save);
   wifiServer.begin();
   Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");
   while (true) {
