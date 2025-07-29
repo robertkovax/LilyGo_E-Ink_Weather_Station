@@ -21,15 +21,15 @@
 //cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
 //modified by: Robert Kovacs, 2025, info@roberkovacs.de, robertkovax.com
 
-//TO DOs:
+//TO DOs:date_str
 // + display low battery warning
 // + re-enable sleep mode
 // - hello "name" on display startup
 // + moon clear weather icons for the nights
-// 5. birthday greeting on the day of the birthday
+// + birthday greeting on the day of the birthday
 // + update wifi credentials via wifi webserver
 // + make moon phase symbol smaller
-//- on dounble click show 4 day forecast immediately
+//+ on long click show 4 day forecast immediately
 
 #include "owm_credentials.h"
 //#include "update_server.h"
@@ -80,7 +80,7 @@ String version = "6.5";       // Version of this program
 bool    LargeIcon = true, SmallIcon = false;
 #define Large 7    // For best results use odd numbers
 #define Small 3    // For best results use odd numbers
-String  time_str, date_str, ForecastDay; // strings to hold time and date
+String  time_str, date_str, date_dd_mm_str, ForecastDay; // strings to hold time and date
 int     wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
 long    StartTime = 0;
 
@@ -100,7 +100,7 @@ float snow_readings[max_readings]        = {0};
 
 long SleepDuration = 30; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
-int  WakeupTime    = 5;  // Don't wakeup until after 07:00 to save battery power
+int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
 
 
 typedef struct { // For current Day and Day 1, 2, 3, etc
@@ -115,7 +115,8 @@ HL_record_type  HLReadings[max_readings];
 #define BUTTON_PIN 39
 //#define LED_PIN    19 //this was conflicting with the display functionality, so it was removed
 RTC_DATA_ATTR bool first_boot = true;
-RTC_DATA_ATTR volatile byte buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
+RTC_DATA_ATTR bool bday_displayed = false;
+RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
    // Increment button wake count
@@ -141,6 +142,7 @@ void setup() {
   // Load WiFi credentials from EEPROM or defaults
   load_wifi_config();
 
+
   // Check for setup mode (button held at power-on)
   if (is_wifi_setup_requested() && String(esp_sleep_get_wakeup_cause()) == "0") {
     Serial.println("entering setup mode...");
@@ -149,7 +151,7 @@ void setup() {
     drawString(10, 30, String("Setup Mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
-    drawString(10, 80, String("open settings page in a browser:"), LEFT);
+    drawString(10, 80, String("open settings page:"), LEFT);
     drawString(10, 100, String("http://192.168.4.1/"), LEFT);
     display.display(false);
     run_wifi_setup_portal();
@@ -157,11 +159,7 @@ void setup() {
     while (true) delay(1000);
   }
 
-  // Load WiFi credentials from EEPROM or defaults
-  load_wifi_config();
-
   InitialiseDisplay();
-
 
   if (BatteryAbovePercentage(10)  == false) {
     Serial.println("Battery too low, stopping");
@@ -187,7 +185,6 @@ void setup() {
     if(reconnect_cnt > 1) {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("WiFi connection failed... "), LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
@@ -207,10 +204,12 @@ void setup() {
   while (SetupTime() != true) { 
     Serial.println("waiting for timeserver...");   
     if(get_time_cnt > 3) {
-      u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-      drawString(10, 30, String("Connecting to timeserver failed..."), LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-      drawString(10, 70, String("'") + ntpServer + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("Connecting to timeserver failed..."), LEFT);
+      drawString(10, 50, String("'") + ntpServer + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 90, String("Update Settings:"),  LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
       Serial.println("too many attempts to get time, stopping");
       buttonWake_cnt = 0;
@@ -229,10 +228,11 @@ void setup() {
     if (RxForecast == false) RxForecast = obtain_wx_data(client, "forecast");
     Serial.println("waiting for weather data...");   
     if(get_weather_cnt > 3 && (!RxWeather || !RxForecast)) {
-      u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-      drawString(10, 30, String("Failed to get weather data..."), LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-      drawString(10, 70, String("'") + weatherServer + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("Failed to get weather data..."), LEFT);
+      drawString(10, 40, String("'") + weatherServer + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 100, String("try Off-->On"),  LEFT);
       display.display(false);
       StopWiFi();
       buttonWake_cnt = 0;
@@ -246,9 +246,28 @@ void setup() {
   StopWiFi();
   Serial.println("Weather data received");
 
+  //check for Bday
+  Serial.println("Bday check: " + String(eeprom_read_string(BDAY_NAME_ADDR, 32)) + " - " + String(eeprom_read_string(BDAY_DATE_ADDR, 32)));
+  if (is_today_birthday() == true && bday_displayed == false) {
+    bday_displayed = true;
+    Serial.println("Today is a birthday of: " + String(eeprom_read_string(BDAY_NAME_ADDR, 32)));
+    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+    drawString(20, 20, String("Sunny B-day " + eeprom_read_string(BDAY_NAME_ADDR, 32)) + "!!!", LEFT);
+    Sunny(115, 70, Large, "01");         
+    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+    drawString(20, 105, String("press Next to continue..."), LEFT);
+    display.display(false);
+    buttonWake_cnt = -1;
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+    delay(500);
+    esp_deep_sleep_start();
+  }else {
+    Serial.println("No birthday today");
+  }
 
   //update display on wakeup
-  if ((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt == 3) {
+  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
+  || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
     first_boot = false;
     buttonWake_cnt = 0;
     Serial.println("Show today's Weather");
@@ -256,18 +275,20 @@ void setup() {
     // WxForecast[1].Icon = "01n"; //WxForecast[5].Icon
     DisplayWeather();
     display.display(false);
+    SleepDuration = 30;
     display.powerOff();
-  }
-  if (buttonWake_cnt == 1)  {
+  }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Show next day forecast");
     ShowNextDayForecast();
     display.display(false);
+    SleepDuration = 5;
     display.powerOff();
-  }
-  if (buttonWake_cnt == 2)  {
+  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
+    buttonWake_cnt = 2;
     Serial.println("Show 4 day forecast");
     Show4DayForecast();
     display.display(false);
+    SleepDuration = 5;
     display.powerOff();
   }
   delay(500);
@@ -279,6 +300,16 @@ void loop() {
   // Nothing to do here, all work is done in setup()
   // The program will go into deep sleep after setup() is completed
   // and will wake up based on the button press or timer.
+}
+//#########################################################################################
+bool is_today_birthday() {
+  String bday = eeprom_read_string(BDAY_DATE_ADDR, 8); // format "dd.mm"
+  if (bday.length() != 5) return false;
+  // time_t now = time(NULL);
+  // struct tm *now_tm = localtime(&now);
+  // char today[6];
+  // snprintf(today, sizeof(today), "%02d.%02d", now_tm->tm_mday, now_tm->tm_mon + 1);
+  return bday == String(date_dd_mm_str);
 }
 //#########################################################################################
 void Show4DayForecast() {
@@ -717,8 +748,8 @@ boolean SetupTime() {
 //#########################################################################################
 boolean UpdateLocalTime() {
   struct tm timeinfo;
-  char   time_output[30], day_output[30], update_time[30];
-  while (!getLocalTime(&timeinfo, 5000)) { // Wait for 5-sec for time to synchronise
+  char   time_output[30], day_output[30], dd_mm_output[10], update_time[30];
+  while (!getLocalTime(&timeinfo, 3000)) { // Wait for 5-sec for time to synchronise
     Serial.println("Failed to obtain time");
     return false;
   }
@@ -727,6 +758,7 @@ boolean UpdateLocalTime() {
   CurrentSec  = timeinfo.tm_sec;
   //See http://www.cplusplus.com/reference/ctime/strftime/
   Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S");      // Displays: Saturday, June 24 2017 14:05:49
+  Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06.17
   if (Units == "M") {
     if ((Language == "CZ") || (Language == "DE") || (Language == "NL") || (Language == "PL") || (Language == "GR"))  {
       sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
@@ -736,15 +768,18 @@ boolean UpdateLocalTime() {
       sprintf(day_output, "%s  %02u-%s-%02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100);
     }
     strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);  // Creates: '@ 14:05', 24h, no am or pm or seconds.   and change from 30 to 8 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
     sprintf(time_output, "%s", update_time);
   }
   else
   {
     strftime(day_output, sizeof(day_output), "%a %b-%d-%y", &timeinfo); // Creates  'Sat May-31-2019'
+    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
     strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);        // Creates: '@ 02:05' - 24h, no seconds or am/pm
     sprintf(time_output, "%s", update_time);
   }
   date_str = day_output;
+  date_dd_mm_str = dd_mm_output;
   time_str = time_output;
   return true;
 }
