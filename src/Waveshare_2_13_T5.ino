@@ -29,7 +29,7 @@
 // + birthday greeting on the day of the birthday
 // + update wifi credentials via wifi webserver
 // + make moon phase symbol smaller
-//- on dounble click show 4 day forecast immediately
+//+ on long click show 4 day forecast immediately
 
 #include "owm_credentials.h"
 //#include "update_server.h"
@@ -100,7 +100,7 @@ float snow_readings[max_readings]        = {0};
 
 long SleepDuration = 30; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
-int  WakeupTime    = 5;  // Don't wakeup until after 07:00 to save battery power
+int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
 
 
 typedef struct { // For current Day and Day 1, 2, 3, etc
@@ -116,7 +116,7 @@ HL_record_type  HLReadings[max_readings];
 //#define LED_PIN    19 //this was conflicting with the display functionality, so it was removed
 RTC_DATA_ATTR bool first_boot = true;
 RTC_DATA_ATTR bool bday_displayed = false;
-RTC_DATA_ATTR volatile byte buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
+RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
    // Increment button wake count
@@ -257,6 +257,7 @@ void setup() {
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(20, 105, String("press Next to continue..."), LEFT);
     display.display(false);
+    buttonWake_cnt = -1;
     esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
     delay(500);
     esp_deep_sleep_start();
@@ -265,7 +266,8 @@ void setup() {
   }
 
   //update display on wakeup
-  if (((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt == 3) && digitalRead(BUTTON_PIN)) {
+  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
+  || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
     first_boot = false;
     buttonWake_cnt = 0;
     Serial.println("Show today's Weather");
@@ -273,19 +275,20 @@ void setup() {
     // WxForecast[1].Icon = "01n"; //WxForecast[5].Icon
     DisplayWeather();
     display.display(false);
+    SleepDuration = 30;
     display.powerOff();
-  }
-  if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
+  }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Show next day forecast");
     ShowNextDayForecast();
     display.display(false);
+    SleepDuration = 5;
     display.powerOff();
-  }
-  if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
+  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
     buttonWake_cnt = 2;
     Serial.println("Show 4 day forecast");
     Show4DayForecast();
     display.display(false);
+    SleepDuration = 5;
     display.powerOff();
   }
   delay(500);
