@@ -139,9 +139,9 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
 
+
   // Load WiFi credentials from EEPROM or defaults
   load_wifi_config();
-
 
   // Check for setup mode (button held at power-on)
   if (is_wifi_setup_requested() && String(esp_sleep_get_wakeup_cause()) == "0") {
@@ -325,8 +325,6 @@ void Show4DayForecast() {
       break;
     }
   }
-  Serial.println("forecast start pos = " +  String(forecastStart));
-
   //get HIGH and LOW for each day
   int maxPos = 0, minPos = 0;
   for (int Day = 0; Day < 4; Day++) { //show 4 days
@@ -402,8 +400,8 @@ void DisplayForecastWeather(int x, int y, int forecast, int Dposition, int fwidt
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 8, y - 22, ForecastDay, CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 18, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
-  display.drawRect(x - 18, y - 30, fwidth, 65, GxEPD_BLACK);
+  drawString(x + 16, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
+  display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
 }
 //#########################################################################################
 String GetForecastDay(int unix_time) {
@@ -927,9 +925,12 @@ void Sunny(int x, int y, bool IconSize, String IconName) { //01
       draw4Star(x + 5, y-18, 4, GxEPD_BLACK);
      }else
        draw4Star(x + 9, y-12, 4, GxEPD_BLACK);
-  }else {
+   }else if(IconSize == LargeIcon) {
     scale = scale * 1.6;
     addsun(x, y, scale, IconSize);
+  }else {
+    scale = scale * 1.4;
+    addsun(x, y-7, scale, IconSize);
   }
 }
 //#########################################################################################
