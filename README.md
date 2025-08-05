@@ -15,7 +15,6 @@ For entering the Weather station setup page keep the "next" button pressed while
 ![alt_text, width="200"](./LilyGo_213_weather_04.jpg)
 
 
-
 ![alt_text, width="200"](./LilyGo_213_weather_station_settup.jpg)
 
 The T5 board is known to have had three different screen revisions, as detailed
@@ -23,5 +22,7 @@ The T5 board is known to have had three different screen revisions, as detailed
 This port uses the latest recommended screen driver, `GxGDE0213B72B.h`.
 
 The housing 3D design files are based on the initial design of [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)
+
+The refresh period is set to every 30 min, then the controller goes into sleep mode. Battery life should be many months on a 1000mAh 3.7V battery. Rechargable via the micro USB plug.
 
 This port was built using PlatformIO in VScode.
