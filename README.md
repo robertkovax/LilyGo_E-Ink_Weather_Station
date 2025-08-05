@@ -13,7 +13,7 @@ This directory was forked from David Bird’s ESP32-e-Paper Weather Display proj
 - Optimized for LilyGo 2.13" 250x122 e-Paper display.
 
 ## Housing for 3D print
-The 3D design files for the housing are included in this repository. This design is based on [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)'s project, with added feet and reinforced, optimised structure for 3D printing.
+The 3D design files for the housing are included in this repository. This design is based on [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)'s project, with added feet and reinforced, optimised structure for 3D printing. There is enough space to fit a 1000mAh 3.7V battery as well.
 
 ## 🔧 Setup server
 The setup web interface enables setting up credentials, time zone, api key, etc. without reprogramming the controller. The values are stored in the EEPROM permanently (until erase). 
@@ -30,13 +30,13 @@ Usage: For entering the Weather station setup page keep the "next" button presse
 
 ![Setup page, width="200"](./LilyGo_213_weather_station_settup.jpg)
 
-## Hardware required
-1. Display module: https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper
-2. Optional: LiPo or LiIon battery (3.7V, 100-1000mAh)
+## Hardware
+1. ESP32 e-ink display module: https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper
+2. Optional: LiPo or LiIon battery with Micro JST 1.25 connector (3.7V, 100-1000mAh)
 
 ## Notes
-- This port uses the latest recommended screen driver, `GxGDE0213B72B.h`.
+- The default screen refresh period is set to 30 min. The controller is in deep sleep in between. This enables battery life for many months (possibly a year) on an 1000mAh 3.7V battery. 
 
-- The screen refresh period is set to every 30 min, then the controller goes into sleep mode. Battery life should be many months on a 1000mAh 3.7V battery. Rechargable via the micro USB plug.
+- Recharge the battery via the micro USB plug.
 
 - This port was built using PlatformIO in VScode.

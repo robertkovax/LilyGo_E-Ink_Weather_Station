@@ -149,7 +149,7 @@ void setup() {
     Serial.println("entering setup mode...");
     InitialiseDisplay();
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-    drawString(10, 30, String("Setup Mode"), LEFT);
+    drawString(10, 30, String("Setup mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
     drawString(10, 80, String("open settings page:"), LEFT);
@@ -233,7 +233,8 @@ void setup() {
       drawString(10, 20, String("Failed to get weather data..."), LEFT);
       drawString(10, 40, String("'") + weatherServer + String("'"),  LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 100, String("try Off-->On"),  LEFT);
+      drawString(10, 90, String("Update Settings:"),  LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
       StopWiFi();
       buttonWake_cnt = 0;
