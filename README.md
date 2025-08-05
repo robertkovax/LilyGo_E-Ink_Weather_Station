@@ -4,7 +4,9 @@ This directory forked from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Displ
 Based on the [LILYGO TTGO T5 V2.3 2.13](https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper)
 board, which incorporates an ESP32 and a 2.13" 250x122 e-ink display.
 
-This for adds a next day and 4-day forecast wiev by pressing the "next" button on the top. The weather icons are also improved and the night icons are diplayed with a moon instead of a sun symbol.
+This fork adds a "next day" and "4-day" forecast wiev by pressing the "next" button on the top. The weather icons are also improved and the night icons are diplayed with a moon instead of a sun symbol.
+
+There is a web interface implemented for setting up credentials, time zone, api key, etc.
 
 ![alt_text, width="200"](./LilyGo_213_weather_01.jpg)
 ![alt_text, width="200"](./LilyGo_213_weather_02.jpg)
