@@ -19,7 +19,7 @@
 */
 
 //cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
-//modified by: Robert Kovacs, 2025, info@roberkovacs.de, robertkovax.com
+//modified by: Robert Kovacs, 2025, info@robertkovacs.de, robertkovax.com
 
 //TO DOs:date_str
 // + display low battery warning
