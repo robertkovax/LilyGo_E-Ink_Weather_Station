@@ -4,6 +4,8 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
+extern long SleepDuration;
+
 #define EEPROM_SIZE 1024
 #define SSID_ADDR   0
 #define PASS_ADDR   64
@@ -81,8 +83,17 @@ void load_wifi_config() {
     EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_sec >> 8) & 0xFF));
     EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_sec >> 16) & 0xFF));
     EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_sec >> 24) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDuration >> 0) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((SleepDuration >> 8) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((SleepDuration >> 16) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((SleepDuration >> 24) & 0xFF));
     EEPROM.write(EEPROM_MARKER_ADDR, EEPROM_MARKER_VALUE); // Set marker
     EEPROM.commit();
+    String name = "partyboy";
+    String bday = "30.02";
+    EEPROM.begin(EEPROM_SIZE); // Ensure EEPROM is initialized with enough size
+    eeprom_write_string(BDAY_NAME_ADDR, name, 32);
+    eeprom_write_string(BDAY_DATE_ADDR, bday, 8);
   }
   // Load all config from EEPROM
   String ssid_str = eeprom_read_string(SSID_ADDR, 64);
@@ -117,18 +128,19 @@ void load_wifi_config() {
 // Helper to get current config value for HTML
 String html_input(const char* name, const String& value, bool isPassword=false, const char* label=nullptr, const char* note=nullptr) {
   String displayLabel = label ? String(label) : String(name);
-  String input = displayLabel + ":<br><input type='";
+  String input = "<form class='field-form' action='/save' method='POST'>";
+  input += "<span class='field-label'>" + displayLabel + ":</span>";
+  input += "<input type='";
   input += (isPassword ? "password" : "text");
   input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'> ";
-  input += "<button type='submit' name='update' value='" + String(name) + "' style='background-color:#006699; color:white;'>Save field</button>";
+  input += "<button type='submit' name='update' value='" + String(name) + "'>Save field</button>";
   if (note) {
-    input += "<br><small style='color: #555;'>" + String(note) + "</small>";
+    input += "<br><span class='field-note'>" + String(note) + "</span>";
   }
-  input += "<br><br>";
+  input += "</form>";
   return input;
 }
 
-// Simple HTML form for all config variables
 const char* wifi_form_html_template = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -136,20 +148,20 @@ const char* wifi_form_html_template = R"rawliteral(
   <title>Weather Station Setup</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body {
-      font-family: sans-serif;
-      background: #f5f5f5;
+    html, body {
       margin: 0;
-      padding: 15px;
+      padding: 0;
+      background: #f5f5f5;
+      font-family: sans-serif;
       color: #222;
     }
     .container {
-      max-width: 500px;
-      margin: auto;
+      max-width: 420px;
+      margin: 20px auto;
       background: #fff;
       padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     h2 {
       font-size: 20px;
@@ -157,45 +169,129 @@ const char* wifi_form_html_template = R"rawliteral(
       text-align: center;
       color: #003344;
     }
-    form {
-      margin: 0;
+    /* Field Form */
+    form.field-form {
+      margin-bottom: 16px;
+    }
+    .field-label {
+      font-size: 14px;
+      margin-bottom: 4px;
+      display: block;
+      color: #003344;
+    }
+    .field-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    input[type="text"], input[type="password"] {
+      flex: 1;
+      padding: 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 14px;
     }
     button {
       background-color: #003344;
       color: white;
       border: none;
-      padding: 8px 16px;
+      padding: 7px 12px;
       border-radius: 4px;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
+      transition: background 0.3s;
+      white-space: nowrap;
     }
-    button:hover {
-      background-color: #003344;
+    .field-note {
+      font-size: 12px;
+      color: #555;
+      margin-top: 4px;
+      display: block;
     }
+    /* Bottom Buttons */
     .btn-group {
       text-align: center;
-      margin-top: 10px;
+      margin-top: 14px;
+      display: block;
+    }
+    .btn-group button {
+      width: 100%;
+      margin-bottom: 10px;
     }
   </style>
   <script>
-    function detectChange(input) {
-      var btn = input.nextElementSibling;
-      if (input.value !== input.getAttribute('data-original')) {
-        btn.style.backgroundColor = '#ff9800'; // orange
+    function detectChange(input, userTyped = false) {
+      var btn = input.form.querySelector('button[type="submit"]');
+      var original = input.getAttribute('data-original') || '';
+      var current = input.value;
+
+      // For password fields, only detect change when user typed
+      if (input.type === 'password' && !userTyped) {
+        btn.style.backgroundColor = '#003344';
+        btn._changed = false;
+        return;
+      }
+
+      if (current !== original) {
+        btn.style.backgroundColor = '#ff9800'; // changed → orange
+        btn._changed = true;
       } else {
-        btn.style.backgroundColor = '#003344'; // green
+        btn.style.backgroundColor = '#003344'; // default → dark blue
+        btn._changed = false;
       }
     }
+
+    function saveField(btn, form) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', '/save', true);
+      xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 204) {
+          btn.style.backgroundColor = '#003344'; // reset after save
+          btn._changed = false;
+          var input = form.querySelector('input');
+          if (input) {
+            input.setAttribute('data-original', input.value);
+          }
+        }
+      };
+      var input = form.querySelector('input');
+      var data = '';
+      if (input) {
+        data = encodeURIComponent(input.name) + '=' + encodeURIComponent(input.value) + '&update=' + encodeURIComponent(input.name);
+      }
+      xhr.send(data);
+      return false;
+    }
+
+    window.onload = function() {
+      var forms = document.querySelectorAll('.field-form');
+      forms.forEach(function(form) {
+        var input = form.querySelector('input');
+        var isPassword = input && input.type === 'password';
+
+        if (input) {
+          input.addEventListener('input', function() {
+            detectChange(input, true);
+          });
+          detectChange(input, !isPassword);
+        }
+
+        form.onsubmit = function(e) {
+          e.preventDefault();
+          var btn = form.querySelector('button[type="submit"]');
+          saveField(btn, form);
+        };
+      });
+    };
   </script>
 </head>
 <body>
   <div class="container">
     <h2>Weather Station Settings</h2>
-    <form action='/save' method='POST'>
-      %s
-    </form>
+    %s
     <form action='/refresh' method='POST' class="btn-group">
-      <button type='submit'>Reload saved values</button>
+      <button type='submit'>Reload Saved Values</button>
     </form>
     <form action='/reboot' method='POST' class="btn-group">
       <button type='submit'>Restart Weather Station</button>
@@ -267,14 +363,16 @@ void handle_wifi_root() {
   form += html_input("city", city_val, false, nullptr, nullptr);
   form += html_input("country", country_val, false, nullptr, nullptr);
   form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
-  form += html_input("timezone", timezone_val, false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
-  form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset", "(e.g. 3600 for GMT+1)");
-  form += html_input("daylight", daylight_val, false, "daylight saving offset", "(e.g. 3600 for 1 hour)");
-  form += html_input("sleepduration", sleepduration_val, false, "Sleep duration (min)", "How many minutes between updates (default: 30)");
+  form += html_input("timezone", timezone_val, false, "time zone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
+  form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [sec]", "(e.g. 3600 for GMT+1)");
+  form += html_input("daylight", daylight_val, false, "daylight saving offset [sec]", "(e.g. 3600 for 1 hour)");
+   form += "</fieldset>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh rate</legend>";
+  form += html_input("sleepduration", sleepduration_val, false, "sleep duration [min]", "Time between fetching new weather data (default: 30)");
   form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap API</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>OpenWeatherMap API</legend>";
   String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
-  form += html_input("apikey", apikey_val, false, "apikey 2.5", "Register at <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a>");
+  form += html_input("apikey", apikey_val, false, "apikey 2.5", "Register at <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a> for free api key");
   form += "</fieldset>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
@@ -357,13 +455,20 @@ void handle_wifi_save() {
       EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
     EEPROM.commit();
-    Serial.println("EEPROM commit done. Redirecting to root page.");
-    wifiServer.sendHeader("Location", "/", true);
-    wifiServer.send(302, "text/plain", ""); // Redirect to root page
+    Serial.println("EEPROM commit done. No page refresh.");
+    wifiServer.send(204, "text/plain", "");
   } else {
     Serial.println("No field selected for update.");
     wifiServer.send(400, "text/html", "<h2>No field selected for update</h2>");
   }
+}
+
+void handle_erase_eeprom() {
+  for (int i = 0; i < EEPROM_SIZE; i++) {
+    EEPROM.write(i, 0xFF);
+  }
+  EEPROM.commit();
+  wifiServer.send(200, "text/html", "<h2>EEPROM erased. Please reboot the device.</h2>");
 }
 
 void run_wifi_setup_portal() {
@@ -376,6 +481,7 @@ void run_wifi_setup_portal() {
   wifiServer.on("/refresh", HTTP_POST, handle_wifi_refresh);
   wifiServer.on("/bday", HTTP_GET, handle_bday_root);
   wifiServer.on("/bday_save", HTTP_POST, handle_bday_save);
+  wifiServer.on("/erase_eeprom", HTTP_GET, handle_erase_eeprom);
   wifiServer.begin();
   Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");
   while (true) {
