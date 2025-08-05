@@ -19,6 +19,7 @@
 #define NTPSERVER_ADDR 448
 #define GMTOFFSET_ADDR 480
 #define DAYLIGHT_ADDR 484
+#define SLEEPDURATION_ADDR 488
 #define BUTTON_PIN 39
 #define LONG_PRESS_MS 2000
 
@@ -97,6 +98,7 @@ void load_wifi_config() {
   String ntpserver_str = eeprom_read_string(NTPSERVER_ADDR, 32);
   long gmtOffset = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
   int daylightOffset = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
+  SleepDuration = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
   ssid_str.toCharArray(ssid, 64);
   pass_str.toCharArray(password, 64);
   apikey = apikey_str;
@@ -259,6 +261,7 @@ void handle_wifi_root() {
   String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
   String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24));
   String daylight_val = String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24));
+  String sleepduration_val = String(EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24));
   form += html_input("lat", lat_val, false, nullptr, nullptr);
   form += html_input("lon", lon_val, false, nullptr, nullptr);
   form += html_input("city", city_val, false, nullptr, nullptr);
@@ -267,6 +270,7 @@ void handle_wifi_root() {
   form += html_input("timezone", timezone_val, false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset", "(e.g. 3600 for GMT+1)");
   form += html_input("daylight", daylight_val, false, "daylight saving offset", "(e.g. 3600 for 1 hour)");
+  form += html_input("sleepduration", sleepduration_val, false, "Sleep duration (min)", "How many minutes between updates (default: 30)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap API</legend>";
   String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
@@ -343,6 +347,14 @@ void handle_wifi_save() {
       EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((daylightOffset >> 8) & 0xFF));
       EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((daylightOffset >> 16) & 0xFF));
       EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((daylightOffset >> 24) & 0xFF));
+    }
+    if (field == "sleepduration" && wifiServer.hasArg("sleepduration")) {
+      long val = wifiServer.arg("sleepduration").toInt();
+      Serial.println("Saving Sleep Duration: " + String(val));
+      EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((val >> 0) & 0xFF));
+      EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((val >> 8) & 0xFF));
+      EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((val >> 16) & 0xFF));
+      EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
     EEPROM.commit();
     Serial.println("EEPROM commit done. Redirecting to root page.");
