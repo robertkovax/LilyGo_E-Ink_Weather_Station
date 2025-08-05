@@ -1,8 +1,8 @@
 #include "wifi_setup.h"
+#include "owm_credentials.h"
 #include <EEPROM.h>
 #include <WiFi.h>
 #include <WebServer.h>
-#include "owm_credentials.h"
 
 #define EEPROM_SIZE 1024
 #define SSID_ADDR   0
@@ -118,7 +118,7 @@ String html_input(const char* name, const String& value, bool isPassword=false, 
   String input = displayLabel + ":<br><input type='";
   input += (isPassword ? "password" : "text");
   input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'> ";
-  input += "<button type='submit' name='update' value='" + String(name) + "' style='background-color:#006699; color:white;'>Save value</button>";
+  input += "<button type='submit' name='update' value='" + String(name) + "' style='background-color:#006699; color:white;'>Save field</button>";
   if (note) {
     input += "<br><small style='color: #555;'>" + String(note) + "</small>";
   }
@@ -265,12 +265,12 @@ void handle_wifi_root() {
   form += html_input("country", country_val, false, nullptr, nullptr);
   form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
   form += html_input("timezone", timezone_val, false, "timezone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
-  form += html_input("gmtoffset", gmtoffset_val, false, nullptr, nullptr);
-  form += html_input("daylight", daylight_val, false, nullptr, nullptr);
+  form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset", "(e.g. 3600 for GMT+1)");
+  form += html_input("daylight", daylight_val, false, "daylight saving offset", "(e.g. 3600 for 1 hour)");
   form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap 2.5 API key</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Openweathermap API</legend>";
   String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
-  form += html_input("apikey", apikey_val, false, "apikey", "See <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org/api_keys</a>");
+  form += html_input("apikey", apikey_val, false, "apikey 2.5", "Register at <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a>");
   form += "</fieldset>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);

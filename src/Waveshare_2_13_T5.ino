@@ -30,6 +30,7 @@
 // + update wifi credentials via wifi webserver
 // + make moon phase symbol smaller
 //+ on long click show 4 day forecast immediately
+//- fun: fetch custom messages from a server
 
 #include "owm_credentials.h"
 //#include "update_server.h"
