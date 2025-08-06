@@ -9,7 +9,7 @@ This directory is a fork of David Bird’s ESP32-e-Paper Weather Display project
 - Improved icons (night icons are displayed with a moon symbol instead of a sun).
 - Updated display layout for improved readability (optimized for LilyGo 2.13" 250x122 e-Paper display)
 
-- **extra:** B-day greeting: set up a birthday greeting that occurs every year
+- **Birthday greeting feature:** displays a recurring message every year on a set date.
 
 ## Housing 3D model
 
