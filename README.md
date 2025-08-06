@@ -6,14 +6,14 @@ This directory is a fork of David Bird’s ESP32-e-Paper Weather Display project
 
 ## Features
 
-- Updated layout for improved readability.
+- Updated display layout for improved readability.
 - Cycling through "current day", "next day" and "4-day" forecast wiev on button press.
-- Improved icons (night icons are diplayed with a moon symbol instead of a sun).
-- WiFi setup server is implemented for user friendly update of credentials, api key, and geographic data.
+- Improved icons (night icons are displayed with a moon symbol instead of a sun).
+- WiFi server for user friendly setup.
 - Optimized for LilyGo 2.13" 250x122 e-Paper display.
 
 ## Housing for 3D print
-The 3D design files for the housing are included in this repository. This design is based on [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)'s project, with added feet and reinforced, optimised structure for 3D printing. There is enough space to fit a 1000mAh 3.7V battery as well.
+The 3D design files for the housing are included in this repository. This design is based on [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)'s project, with added feet and reinforced, optimised structure for 3D printing. There is space to fit a 1000mAh 3.7V battery as well.
 
 ## 📷 Images
 
@@ -23,7 +23,7 @@ The 3D design files for the housing are included in this repository. This design
 ![alt_text, width="200"](./LilyGo_213_weather_04.jpg)
 
 ## Setup server
-The web interface enables setting up credentials, time zone, api key, etc. without reprogramming the controller. The values are stored in the EEPROM permanently (until erase). 
+The web interface enables setting up credentials, time zone, api key, etc. without reprogramming the controller. The values are stored in the EEPROM permanently (unless full erase using: http://192.168.4.1/erase_eeprom). 
 
 Usage: For entering the Weather station setup page keep the "next" button pressed while switching the power ON. This will start a WiFi server called "weather_station_wifi". Connect to this and open http://192.168.4.1/
 
