@@ -17,16 +17,16 @@ The STL design files for 3D printing the housing are included in this repository
 
 ## 📷 Images
 
-![Weather Station](./LilyGo_213_weather_01.jpg)
 ![Weather Station](./LilyGo_213_weather_02.jpg)
 ![Weather Station](./LilyGo_213_weather_03.jpg)
+![Weather Station](./LilyGo_213_weather_01.jpg)
 
 ## Setup server
 The web interface enables setting up credentials, time zone, api key, etc. without reprogramming the controller.
 
-**Usage:** For entering the Weather station setup page keep the "next" button pressed while switching the power ON. This will start a WiFi server called "weather_station_wifi". Connect to this and open http://192.168.4.1/
+**Usage:** For entering the Weather Station Settings page keep the "next" button pressed while switching the power ON. This will start a WiFi server called "weather_station_wifi". Connect to this and open http://192.168.4.1/
 
-The values are stored in the EEPROM permanently (even after power loss). Erase using: http://192.168.4.1/erase_eeprom 
+The values will be stored in the EEPROM permanently (even after power loss). Erase using: http://192.168.4.1/erase_eeprom 
 
 ![Setup page](./LilyGo_213_weather_station_setup.jpg)
 
