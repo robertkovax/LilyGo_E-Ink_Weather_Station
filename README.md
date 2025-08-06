@@ -27,7 +27,7 @@ The web interface enables setting up credentials, time zone, api key, etc. witho
 
 Usage: For entering the Weather station setup page keep the "next" button pressed while switching the power ON. This will start a WiFi server called "weather_station_wifi". Connect to this and open http://192.168.4.1/
 
-![Setup page, width="200"](./LilyGo_213_weather_station_settup.jpg)
+![Setup page, width="200"](./LilyGo_213_weather_station_setup.jpg)
 
 ## Hardware
 1. ESP32 e-ink display module: https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper
