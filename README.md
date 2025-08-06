@@ -32,7 +32,10 @@ The values will be stored in the EEPROM permanently (even after power loss). Era
 
 ## B-day greeting
 
-To set up a recurring birthday greeting for a person, open the (hidden) page: http://192.168.4.1/bday (while connected to "weather_station_wifi")
+To set up a recurring birthday greeting for a person, open the (hidden) Bday setup page, while being connected to "weather_station_wifi":
+
+http://192.168.4.1/bday
+
 ![Bday setup](./LilyGo_213_Bday_setup.jpg)
 
 This will show the following greeting message every year on the set date at the beginning of the day:
