@@ -89,7 +89,7 @@ void load_wifi_config() {
     EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((SleepDuration >> 24) & 0xFF));
     EEPROM.write(EEPROM_MARKER_ADDR, EEPROM_MARKER_VALUE); // Set marker
     EEPROM.commit();
-    String name = "partyboy";
+    String name = "Jupiter";
     String bday = "30.02";
     EEPROM.begin(EEPROM_SIZE); // Ensure EEPROM is initialized with enough size
     eeprom_write_string(BDAY_NAME_ADDR, name, 32);
@@ -130,12 +130,14 @@ String html_input(const char* name, const String& value, bool isPassword=false, 
   String displayLabel = label ? String(label) : String(name);
   String input = "<form class='field-form' action='/save' method='POST'>";
   input += "<span class='field-label'>" + displayLabel + ":</span>";
+  input += "<div class='field-row'>";
   input += "<input type='";
   input += (isPassword ? "password" : "text");
-  input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'> ";
+  input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'>";
   input += "<button type='submit' name='update' value='" + String(name) + "'>Save field</button>";
+  input += "</div>";
   if (note) {
-    input += "<br><span class='field-note'>" + String(note) + "</span>";
+    input += "<span class='field-note'>" + String(note) + "</span>";
   }
   input += "</form>";
   return input;
@@ -221,18 +223,18 @@ const char* wifi_form_html_template = R"rawliteral(
   </style>
   <script>
     function detectChange(input, userTyped = false) {
-      var btn = input.form.querySelector('button[type="submit"]');
-      var original = input.getAttribute('data-original') || '';
-      var current = input.value;
-
-      // For password fields, only detect change when user typed
-      if (input.type === 'password' && !userTyped) {
-        btn.style.backgroundColor = '#003344';
-        btn._changed = false;
-        return;
-      }
-
-      if (current !== original) {
+      var form = input.form;
+      var btn = form.querySelector('button[type="submit"]');
+      var changed = false;
+      var inputs = form.querySelectorAll('input');
+      inputs.forEach(function(inp) {
+        var original = inp.getAttribute('data-original') || '';
+        var current = inp.value;
+        // For password fields, only detect change when user typed
+        if (inp.type === 'password' && !userTyped) return;
+        if (current !== original) changed = true;
+      });
+      if (changed) {
         btn.style.backgroundColor = '#ff9800'; // changed → orange
         btn._changed = true;
       } else {
@@ -290,55 +292,28 @@ const char* wifi_form_html_template = R"rawliteral(
   <div class="container">
     <h2>Weather Station Settings</h2>
     %s
-    <form action='/refresh' method='POST' class="btn-group">
-      <button type='submit'>Reload Saved Values</button>
-    </form>
     <form action='/reboot' method='POST' class="btn-group">
-      <button type='submit'>Restart Weather Station</button>
+      <button type='submit'>Apply and Reboot</button>
     </form>
   </div>
 </body>
 </html>
 )rawliteral";
 
+
 void handle_bday_root() {
   String name = eeprom_read_string(BDAY_NAME_ADDR, 32);
   String bday = eeprom_read_string(BDAY_DATE_ADDR, 8);
-  String form = "<h2>Birthday Setup</h2>";
-  form += "<form action='/bday_save' method='POST'>";
-  form += "Name:<br><input type='text' name='bday_name' value='" + name + "'><br><br>";
-  form += "Birthday (dd.mm):<br><input type='text' name='bday_date' value='" + bday + "'><br><br>";
-  form += "<button type='submit'>Save Birthday</button>";
-  form += "</form>";
-  form += "<br><form action='/' method='GET'><button type='submit'>Back to Setup</button></form>";
-  wifiServer.send(200, "text/html", form);
-}
-
-void handle_bday_save() {
-  if (wifiServer.hasArg("bday_name") && wifiServer.hasArg("bday_date")) {
-    String name = wifiServer.arg("bday_name");
-    String bday = wifiServer.arg("bday_date");
-    EEPROM.begin(EEPROM_SIZE); // Ensure EEPROM is initialized with enough size
-    eeprom_write_string(BDAY_NAME_ADDR, name, 32);
-    eeprom_write_string(BDAY_DATE_ADDR, bday, 8);
-    EEPROM.commit();
-    Serial.println("Birthday name saved: " + name);
-    Serial.println("Birthday date saved: " + bday);
-
-    // Read back from EEPROM to ensure fields are populated with saved values
-    String saved_name = eeprom_read_string(BDAY_NAME_ADDR, 32);
-    String saved_bday = eeprom_read_string(BDAY_DATE_ADDR, 8);
-    String form = "<h2>Birthday Setup</h2>";
-    form += "<form action='/bday_save' method='POST'>";
-    form += "Name:<br><input type='text' name='bday_name' value='" + saved_name + "'><br><br>";
-    form += "Birthday (dd.mm):<br><input type='text' name='bday_date' value='" + saved_bday + "'><br><br>";
-    form += "<button type='submit'>Save Birthday</button>";
-    form += "</form>";
-    form += "<br><form action='/' method='GET'><button type='submit'>Back to Setup</button></form>";
-    wifiServer.send(200, "text/html", form);
-  } else {
-    wifiServer.send(400, "text/html", "<h2>Missing name or birthday</h2>");
-  }
+  String form = "";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup birthday greeting</legend>";
+  // Use html_input but override the action to /bday_save
+  form += html_input("bday_name", name, false, "name", nullptr);
+  form += html_input("bday_date", bday, false, "birthday (dd.mm)", "(e.g. 24.12)");
+  form += "</fieldset>";
+  form += "<form action='/' method='GET' class='btn-group'><button type='submit'>Back to Setup</button></form>";
+  String html = String(wifi_form_html_template);
+  html.replace("%s", form);
+  wifiServer.send(200, "text/html", html);
 }
 
 void handle_wifi_root() {
@@ -363,16 +338,16 @@ void handle_wifi_root() {
   form += html_input("city", city_val, false, nullptr, nullptr);
   form += html_input("country", country_val, false, nullptr, nullptr);
   form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
-  form += html_input("timezone", timezone_val, false, "time zone", "See <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
+  form += html_input("timezone", timezone_val, false, "time zone", "see: <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [sec]", "(e.g. 3600 for GMT+1)");
   form += html_input("daylight", daylight_val, false, "daylight saving offset [sec]", "(e.g. 3600 for 1 hour)");
    form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh rate</legend>";
-  form += html_input("sleepduration", sleepduration_val, false, "sleep duration [min]", "Time between fetching new weather data (default: 30)");
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh Period</legend>";
+  form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 30 min)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>OpenWeatherMap API</legend>";
   String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
-  form += html_input("apikey", apikey_val, false, "apikey 2.5", "Register at <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a> for free api key");
+  form += html_input("apikey", apikey_val, false, "apikey 2.5", "register for free api key at: <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a>");
   form += "</fieldset>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
@@ -454,6 +429,14 @@ void handle_wifi_save() {
       EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((val >> 16) & 0xFF));
       EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
+    if (field == "bday_name" && wifiServer.hasArg("bday_name")) {
+      Serial.println("Saving bday_name: " + wifiServer.arg("bday_name"));
+      eeprom_write_string(BDAY_NAME_ADDR, wifiServer.arg("bday_name"), 32);
+    }
+    if (field == "bday_date" && wifiServer.hasArg("bday_date")) {
+      Serial.println("Saving bday_date: " + wifiServer.arg("bday_date"));
+      eeprom_write_string(BDAY_DATE_ADDR, wifiServer.arg("bday_date"), 8);
+    }
     EEPROM.commit();
     Serial.println("EEPROM commit done. No page refresh.");
     wifiServer.send(204, "text/plain", "");
@@ -480,7 +463,6 @@ void run_wifi_setup_portal() {
   wifiServer.on("/reboot", HTTP_POST, handle_wifi_reboot);
   wifiServer.on("/refresh", HTTP_POST, handle_wifi_refresh);
   wifiServer.on("/bday", HTTP_GET, handle_bday_root);
-  wifiServer.on("/bday_save", HTTP_POST, handle_bday_save);
   wifiServer.on("/erase_eeprom", HTTP_GET, handle_erase_eeprom);
   wifiServer.begin();
   Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");
