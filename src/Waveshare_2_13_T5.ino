@@ -18,22 +18,23 @@
   See more at http://www.dsbird.org.uk
 */
 
-//cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
-//modified by: Robert Kovacs, 2025, info@robertkovacs.de, robertkovax.com
 
-//TO DOs:date_str
-// + display low battery warning
-// + re-enable sleep mode
-// - hello "name" on display startup
-// + moon clear weather icons for the nights
-// + birthday greeting on the day of the birthday
-// + update wifi credentials via wifi webserver
-// + make moon phase symbol smaller
-//+ on long click show 4 day forecast immediately
-//- fun: fetch custom messages from a server
+//modified by: Robert Kovacs, 2025, info@robertkovacs.de, https://robertkovax.com/
+//cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
+
+//**New functionality:**
+// + Cycle through "current day", "next day" and "4-day" forecast view on button press. 
+// + Long-press brings up the 4-day forecast right away. 
+// + update wifi credentials via wifi webserver "weather_station_wifi" http://192.168.4.1
+// + birthday greeting setup: http://192.168.4.1/bday
+// + improved weather icons
+// + display low battery warning and enables deep sleep to prevent depleeting the battery
+// + display wifi connection failure msg
+// + display weather server failure msg
+// + customized for Lilygo TTGO T5 V2.3_2.13 e-paper display
+
 
 #include "owm_credentials.h"
-//#include "update_server.h"
 #include "forecast_record.h"
 #include "lang.h"   
 #include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
@@ -46,8 +47,6 @@
 #include <U8g2_for_Adafruit_GFX.h>
 #include "wifi_setup.h"
  
-
-
 //#define DRAW_GRID 1   //Help debug layout changes
 #define SCREEN_WIDTH   250
 #define SCREEN_HEIGHT  122
@@ -103,7 +102,6 @@ long SleepDuration = 30; // Sleep time in minutes, aligned to the nearest minute
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
 int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
 
-
 typedef struct { // For current Day and Day 1, 2, 3, etc
   String Time;
   float  High;
@@ -114,13 +112,13 @@ HL_record_type  HLReadings[max_readings];
 
 // Add these defines for button and LED pins
 #define BUTTON_PIN 39
-//#define LED_PIN    19 //this was conflicting with the display functionality, so it was removed
+//#define LED_PIN    19 //this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR bool first_boot = true;
 RTC_DATA_ATTR bool bday_displayed = false;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
-   // Increment button wake count
+  // Button wake
 }
 
 //#########################################################################################
@@ -129,7 +127,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Weather station active");
   Serial.println("Wakeup cause: " + String(esp_sleep_get_wakeup_cause()));
-  if(esp_sleep_get_wakeup_cause() == 2)  { // 2 = External wakeup
+  if(esp_sleep_get_wakeup_cause() == 2)  { // 2 = External (button) interrupt
     buttonWake_cnt++;
   }else{
     buttonWake_cnt = 0;
@@ -145,7 +143,7 @@ void setup() {
   load_wifi_config();
 
   // Check for setup mode (button held at power-on)
-  if (is_wifi_setup_requested() && String(esp_sleep_get_wakeup_cause()) == "0") {
+  if (digitalRead(BUTTON_PIN) == LOW && String(esp_sleep_get_wakeup_cause()) == "0") {
     Serial.println("entering setup mode...");
     InitialiseDisplay();
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
@@ -273,14 +271,12 @@ void setup() {
     first_boot = false;
     buttonWake_cnt = 0;
     Serial.println("Show today's Weather");
-    // WxConditions[0].Icon = "01n"; //WxConditions[0].Icon
-    // WxForecast[1].Icon = "01n"; //WxForecast[5].Icon
     DisplayWeather();
     display.display(false);
     SleepDuration = 30;
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
-    Serial.println("Show next day forecast");
+    Serial.println("Show next day's forecast");
     ShowNextDayForecast();
     display.display(false);
     SleepDuration = 5;
@@ -318,8 +314,7 @@ void Show4DayForecast() {
   Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 33, "4-day forecast:", LEFT);
-  //UpdateLocalTime();
-  //GetHighsandLows();
+
   int forecastStart = 0, Dposition = 0;
   for (int i = 2; i < max_readings; i++) {
     if (WxForecast[i].Period.substring(11, 13) == "09") { //find the start of the next day
@@ -354,47 +349,17 @@ void ShowNextDayForecast() {
   for (int i = 3; i < max_readings - 4; i++) {
     if (WxForecast[i].Period.substring(11, 13) == "09") { //find the start of the next day
       Serial.println("Forecast for " + String(WxForecast[i].Period) + " = " + String(WxForecast[i].Temperature) + "C" + "pos = " + i);
-      Draw_next_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
-      Draw_next_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
-      Draw_next_3hr_Forecast(83, 96, i + 2);   // Third  3hr forecast box
-      Draw_next_3hr_Forecast(127, 96, i + 3);   // Fourth  3hr forecast box
-      Draw_next_3hr_Forecast(170, 96, i + 4);   // Fifth 3hr forecast box 
+      Draw_Next_Day_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
+      Draw_Next_Day_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
+      Draw_Next_Day_3hr_Forecast(83, 96, i + 2);   // Third  3hr forecast box
+      Draw_Next_Day_3hr_Forecast(127, 96, i + 3);   // Fourth  3hr forecast box
+      Draw_Next_Day_3hr_Forecast(170, 96, i + 4);   // Fifth 3hr forecast box 
       DrawSmallWind(231, 75, WxForecast[i + 1].Winddir, WxForecast[i + 1].Windspeed);
       return;
     }
   }
 }
-
-//#########################################################################################
-void GetHighsandLows() {
-  for (int d = 0; d < max_readings; d++) {
-    HLReadings[d].Time = "";
-    HLReadings[d].High = (Units == "M"?-50:-58);
-    HLReadings[d].Low  = (Units == "M"?70:158);
-  }
-  int Day = 0;
-  String StartTime  = "08:00" + String((Units == "M" ? "" : "a"));
-  String FinishTime = "10:00" + String((Units == "M" ? "" : "a"));
-  for (int r = 0; r < max_readings; r++) {
-    if (ConvertUnixTime(WxForecast[r].Dt + WxConditions[0].Timezone).substring(0, (Units == "M" ? 5 : 6)) >= StartTime && ConvertUnixTime(WxForecast[r].Dt + WxForecast[r].Timezone).substring(0, (Units == "M" ? 5 : 6)) <= FinishTime) { // found first period in day
-      HLReadings[Day].Time = ConvertUnixTime(WxForecast[r].Dt + WxConditions[0].Timezone).substring(0, (Units == "M" ? 5 : 6));
-      for (int InDay = 0; InDay < 8; InDay++) { // 00:00 to 21:00 is 8 readings
-        if (r + InDay < max_readings) {
-          if (WxForecast[r + InDay].High > HLReadings[Day].High) {
-            HLReadings[Day].High = WxForecast[r + InDay].High;
-          }
-          if (WxForecast[r + InDay].Low  < HLReadings[Day].Low)  {
-            HLReadings[Day].Low  = WxForecast[r + InDay].Low;
-          }
-        }
-      }
-      Serial.println("Cnt= " + String(Day) + "Day=" + HLReadings[Day].Time + " " + String(HLReadings[Day].High) + " " + String(HLReadings[Day].Low));
-      Day++;
-    }
-  }
-} // Now the array HLReadings has 5-days of Highs and Lows
 //######################################################################################### 
-
 void DisplayForecastWeather(int x, int y, int forecast, int Dposition, int fwidth) {
   GetForecastDay(WxForecast[forecast].Dt);
   x += fwidth * Dposition;
@@ -528,8 +493,6 @@ void Draw_Main_Weather_Section() {
   DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
 }
 //#########################################################################################
-// ? How 'big' is a weather forecast box??
-// From the lines, looks like 44 wide and 52 high?
 void Draw_3hr_Forecast(int x, int y, int index) {
   DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
@@ -539,8 +502,8 @@ void Draw_3hr_Forecast(int x, int y, int index) {
   display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52 , GxEPD_BLACK);
   display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52 , GxEPD_BLACK);
 }
-
-void Draw_next_3hr_Forecast(int x, int y, int index) {
+//#########################################################################################
+void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
   DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 4, y - 28, WxForecast[index].Period.substring(11, 16), LEFT);
@@ -1166,41 +1129,6 @@ void draw4Star(int16_t x, int16_t y, int16_t radius, uint16_t color) {
   }
 }
 //#########################################################################################
-void drawStar(int16_t x, int16_t y, int16_t radius, uint16_t color) {
-  // Calculate coordinates for the circle and points of the star
-  float angle = 360.0 / 5.0;
-  int16_t x_c = x;
-  int16_t y_c = y;
-  int16_t r = radius;
-  int16_t r_in = r * 0.332; // Adjust for star point depth
-
-  // Draw the outer circle (optional)
-  // tft.drawCircle(x_c, y_c, r, color);
-
-  // Calculate and draw the star points
-  for(int i = 0; i < 5; ++i) {
-    float a = angle * i * (PI / 180.0);
-    int16_t x1 = x_c + r * sin(a);
-    int16_t y1 = y_c - r * cos(a);
-    a = angle * (i + 2) * (PI / 180.0); // Adjust for point inwards
-    int16_t x2 = x_c + r_in * sin(a);
-    int16_t y2 = y_c - r_in * cos(a);
-
-    display.fillTriangle(x_c, y_c, x1, y1, x2, y2, color);
-
-    // For a more complex star shape, connect the points differently.
-    // For example, create a 10-pointed star by connecting every other point.
-    // For a polygon-based star, calculate the vertices of the polygon and pass to drawPolygon.
-
-  }
-
-  // If using a polygon based star, use
-  // int16_t star_x[5] = {x1, x2, x3, x4, x5};
-  // int16_t star_y[5] = {y1, y2, y3, y4, y5};
-  // tft.drawPolygon(star_x, star_y, 5, color); // Requires a drawPolygon function or similar helper
-}
-
-//#########################################################################################
 void Nodata(int x, int y, bool IconSize, String IconName) {
   if (IconSize == LargeIcon) u8g2Fonts.setFont(u8g2_font_helvB24_tf); else u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x - 3, y - 8, "?", CENTER);
@@ -1241,8 +1169,8 @@ void drawStringMaxWidth(int x, int y, unsigned int text_width, String text, alig
 //#########################################################################################
 void InitialiseDisplay() {
   //Serial.println("Begin InitialiseDisplay...");
-  display.init(115200, true, 0, false);
-  // display.init(); for older Waveshare HAT's
+  //display.init(115200, true, 0, false);
+  display.init(0); //for older Waveshare HAT's
   SPI.end();
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
   display.setRotation(3);                    // Use 1 or 3 for landscape modes

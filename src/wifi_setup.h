@@ -26,17 +26,12 @@
 #define BDAY_NAME_ADDR 492
 #define BDAY_DATE_ADDR 524
 
-// Returns true if button is held at power-on
-bool is_wifi_setup_requested();
 
 // Starts the WiFi setup portal (webserver)
 void run_wifi_setup_portal();
 
 // Loads credentials and config from EEPROM or owm_credentials.h
 void load_wifi_config();
-
-// Returns true if today is the saved birthday
-bool is_today_birthday();
 
 String eeprom_read_string(int addr, int maxlen); 
 

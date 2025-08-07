@@ -1,6 +1,9 @@
-#include "owm_credentials.h"
+//these variables will be loaded into the EEPROM at the first boot after programming (in "wifi_setup.cpp"). 
+//When EEPROM is already populated (EEPROM_MARKER_VALUE is set to 0xA5), then only the EEPROM values will be used.
+//Values can be set or erased in the web interface.
+//Full erase of EEPROM is done by: http://192.168.4.1/erase_eeprom
 
-//these settings can be set in the web interface as well
+#include "owm_credentials.h"
 
 char ssid[64]     = "";
 char password[64] = "";

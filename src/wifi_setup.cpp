@@ -1,3 +1,9 @@
+//Here are the WiFi credentials loaded from EEPROM (or owm_credentials.h at first boot after programming).
+//It provides a web interface for setting up the WiFi credentials, OpenWeatherMap API key, location data, and refresh period.
+//The web interface is accessible at http://192.168.4.1
+//Birthday greeting setup at: at http://192.168.4.1/bday (You can set up a birthday greeting that occurs every year.)
+//You can also erase the EEPROM to reset all settings to default values: http://192.168.4.1/erase_eeprom
+
 #include "wifi_setup.h"
 #include "owm_credentials.h"
 #include <EEPROM.h>
@@ -23,7 +29,6 @@ extern long SleepDuration;
 #define DAYLIGHT_ADDR 484
 #define SLEEPDURATION_ADDR 488
 #define BUTTON_PIN 39
-#define LONG_PRESS_MS 2000
 
 #define EEPROM_MARKER_ADDR 550
 #define EEPROM_MARKER_VALUE 0xA5
@@ -46,16 +51,6 @@ String eeprom_read_string(int addr, int maxlen) {
   String s = String(buf);
   s.trim();
   return s;
-}
-
-// Check if button is held at power-on
-bool is_wifi_setup_requested() {
-  unsigned long start = millis();
-  while (millis() - start < LONG_PRESS_MS) {
-    if (digitalRead(BUTTON_PIN) == LOW) return true;
-    delay(10);
-  }
-  return false;
 }
 
 // Load config from EEPROM or owm_credentials.h
