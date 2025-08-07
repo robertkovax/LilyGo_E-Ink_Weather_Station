@@ -98,7 +98,10 @@ float humidity_readings[max_readings]    = {0};
 float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
 
-long SleepDuration = 30; // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
+//this is here the initial value, it will be updated from the EEPROM  after setting a value in the web interface
+// Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
+int SleepDurationPreset = 30; 
+int SleepDuration;
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
 int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
 
@@ -127,7 +130,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Weather station active");
   Serial.println("Wakeup cause: " + String(esp_sleep_get_wakeup_cause()));
-  if(esp_sleep_get_wakeup_cause() == 2)  { // 2 = External (button) interrupt
+  if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0)  { //  0 = Power on reset, 2 = External (button) interrupt, 4 = timer wakeup
     buttonWake_cnt++;
   }else{
     buttonWake_cnt = 0;
@@ -138,12 +141,12 @@ void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
 
-
   // Load WiFi credentials from EEPROM or defaults
   load_wifi_config();
+  SleepDuration = SleepDurationPreset;
 
   // Check for setup mode (button held at power-on)
-  if (digitalRead(BUTTON_PIN) == LOW && String(esp_sleep_get_wakeup_cause()) == "0") {
+  if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) { // Power on reset
     Serial.println("entering setup mode...");
     InitialiseDisplay();
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
@@ -171,6 +174,7 @@ void setup() {
     display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
     display.display(false);
     display.powerOff();
+    buttonWake_cnt = -1;
     esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
     delay(500);
     esp_deep_sleep_start();
@@ -189,10 +193,10 @@ void setup() {
       drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
-      Serial.println("too many attempts to connect to WiFi, stopping");
-      buttonWake_cnt = 0;
+      Serial.println("WiFi connection failed...");
+      buttonWake_cnt = -1;
       delay(500);
-      BeginSleep();
+      BeginSleep(SleepDuration);
     }  
     reconnect_cnt++;
     delay(500);
@@ -210,10 +214,10 @@ void setup() {
       drawString(10, 90, String("Update Settings:"),  LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
-      Serial.println("too many attempts to get time, stopping");
-      buttonWake_cnt = 0;
+      Serial.println("Connecting to timeserver failed...");
+      buttonWake_cnt = -1;
       delay(500);
-      BeginSleep();
+      BeginSleep(SleepDuration);
     }  
     get_time_cnt++;
     delay(500);
@@ -235,10 +239,10 @@ void setup() {
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
       StopWiFi();
-      buttonWake_cnt = 0;
-      Serial.println("too many attempts to get weather data, stopping");
+      buttonWake_cnt = -1;
+      Serial.println("Failed to get weather data...");
       delay(5000);
-      BeginSleep();
+      BeginSleep(SleepDuration);
     }
     get_weather_cnt++;
     delay(500);
@@ -273,24 +277,24 @@ void setup() {
     Serial.println("Show today's Weather");
     DisplayWeather();
     display.display(false);
-    SleepDuration = 30;
+    SleepDuration = SleepDurationPreset;
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Show next day's forecast");
     ShowNextDayForecast();
     display.display(false);
-    SleepDuration = 5;
+    SleepDuration = 5; //after 5 minutes go back to current day display
     display.powerOff();
   } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
     buttonWake_cnt = 2;
     Serial.println("Show 4 day forecast");
     Show4DayForecast();
     display.display(false);
-    SleepDuration = 5;
+    SleepDuration = 5; //after 5 minutes go back to current day display
     display.powerOff();
   }
   delay(500);
-  BeginSleep();
+  BeginSleep(SleepDuration);
 }
 
 //#########################################################################################
@@ -404,13 +408,13 @@ void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
 }
 //#########################################################################################
 
-void BeginSleep() {
+void BeginSleep(long _sleepDuration) {
   display.powerOff();
   StopWiFi();
   // Enable wakeup by timer and by button (ext0)
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
-  long SleepTimer = (SleepDuration * 60 - ((CurrentMin % SleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((SleepTimer+20) * 1000000LL); // Added 20-sec extra delay to cater for slow ESP32 RTC timers
+  long SleepTimer = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
+  esp_sleep_enable_timer_wakeup((SleepTimer+30) * 1000000LL); // Added 30-sec extra delay to cater for slow ESP32 RTC timers
 #ifdef BUILTIN_LED
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
@@ -1227,5 +1231,5 @@ void InitialiseDisplay() {
   // Draw_3hr_Forecast(211, 96, 6);   // Fifth 3hr forecast box
   // display.display(true);
   // delay(1500);
-  // BeginSleep();
+  // BeginSleep(sleepPeriod);
   //end test

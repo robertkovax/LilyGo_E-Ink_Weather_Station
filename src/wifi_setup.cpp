@@ -10,7 +10,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-extern long SleepDuration;
+extern int SleepDurationPreset;
 
 #define EEPROM_SIZE 1024
 #define SSID_ADDR   0
@@ -78,10 +78,10 @@ void load_wifi_config() {
     EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_sec >> 8) & 0xFF));
     EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_sec >> 16) & 0xFF));
     EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_sec >> 24) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDuration >> 0) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((SleepDuration >> 8) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((SleepDuration >> 16) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((SleepDuration >> 24) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDurationPreset >> 0) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((SleepDurationPreset >> 8) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((SleepDurationPreset >> 16) & 0xFF));
+    EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((SleepDurationPreset >> 24) & 0xFF));
     EEPROM.write(EEPROM_MARKER_ADDR, EEPROM_MARKER_VALUE); // Set marker
     EEPROM.commit();
     String name = "Jupiter";
@@ -104,7 +104,7 @@ void load_wifi_config() {
   String ntpserver_str = eeprom_read_string(NTPSERVER_ADDR, 32);
   long gmtOffset = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
   int daylightOffset = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
-  SleepDuration = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
+  SleepDurationPreset = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
   ssid_str.toCharArray(ssid, 64);
   pass_str.toCharArray(password, 64);
   apikey = apikey_str;
