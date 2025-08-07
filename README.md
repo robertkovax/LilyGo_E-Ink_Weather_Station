@@ -15,6 +15,8 @@ This directory is a fork of David Bird’s ESP32-e-Paper Weather Display project
 
 - The STL design files for 3D printing the housing are included in this repository. This design is based on [Sir.Puchtuning](https://makerworld.com/en/models/647684-lilygo-t5-2-13-small-case?from=search#profileId-1024510)'s project, with added feet and reinforced, optimised structure for 3D printing. 
 - The housing can fit a 1000mAh 3.7V battery.
+- The front cover can be screwed by M2x10mm screws
+- the back part of the feet needs to be attached by glue (separated this way for better printability)
 
 ## 📷 Images
 
