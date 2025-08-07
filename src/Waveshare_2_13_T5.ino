@@ -208,7 +208,7 @@ void setup() {
     Serial.println("waiting for timeserver...");   
     if(get_time_cnt > 3) {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("Connecting to timeserver failed..."), LEFT);
+      drawString(10, 20, String("Timeserver connection failed..."), LEFT);
       drawString(10, 50, String("'") + ntpServer + String("'"),  LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update Settings:"),  LEFT);
@@ -270,7 +270,7 @@ void setup() {
   }
 
   //update display on wakeup
-  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
+  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
   || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
     first_boot = false;
     buttonWake_cnt = 0;
