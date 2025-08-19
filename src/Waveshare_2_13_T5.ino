@@ -253,7 +253,7 @@ void setup() {
   //check for up to 4 Bdays
   const int bday_name_addrs[4] = {BDAY1_NAME_ADDR, BDAY2_NAME_ADDR, BDAY3_NAME_ADDR, BDAY4_NAME_ADDR};
   const int bday_date_addrs[4] = {BDAY1_DATE_ADDR, BDAY2_DATE_ADDR, BDAY3_DATE_ADDR, BDAY4_DATE_ADDR};
-  uint8_t bday_found = 0;
+  uint8_t bday_found = 255;
   for (int i = 0; i < 4; i++) {
     String bday_name = eeprom_read_string(bday_name_addrs[i], 16);
     String bday_date = eeprom_read_string(bday_date_addrs[i], 8);
@@ -276,7 +276,7 @@ void setup() {
       }
     }
   }
-  if (bday_found == 0) {
+  if (bday_found == 255) {
     bday_displayed = 0;
     Serial.println("No birthday today");
   }
@@ -324,7 +324,7 @@ bool is_today_birthday(String bday) {
   // struct tm *now_tm = localtime(&now);
   // char today[6];
   // snprintf(today, sizeof(today), "%02d.%02d", now_tm->tm_mday, now_tm->tm_mon + 1);
-  return bday == String(date_dd_mm_str);
+  return (bday == String(date_dd_mm_str));
 }
 //#########################################################################################
 void Show4DayForecast() {

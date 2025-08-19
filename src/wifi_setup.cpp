@@ -425,7 +425,7 @@ void handle_erase_eeprom() {
     EEPROM.write(i, 0xFF);
   }
   EEPROM.commit();
-  wifiServer.send(200, "text/html", "<h2>EEPROM erased with all 0x00. Please reboot the device.</h2>");
+  wifiServer.send(200, "text/html", "<h2>EEPROM erased with 0x00. Please reboot the device.</h2>");
 }
 
 void erase_eeprom(int eeprom_size, byte erase_value){

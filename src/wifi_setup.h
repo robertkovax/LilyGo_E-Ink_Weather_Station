@@ -41,6 +41,7 @@ void run_wifi_setup_portal();
 void load_wifi_config();
 
 String eeprom_read_string(int addr, int maxlen);
-void erase_eeprom(int eeprom_size);
+
+void erase_eeprom(int eeprom_size, byte value);
 
 #endif // WIFI_SETUP_H
