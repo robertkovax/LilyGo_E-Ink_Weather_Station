@@ -117,7 +117,7 @@ HL_record_type  HLReadings[max_readings];
 #define BUTTON_PIN 39
 //#define LED_PIN    19 //this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR bool first_boot = true;
-RTC_DATA_ATTR bool bday_displayed = false;
+RTC_DATA_ATTR volatile int8_t bday_displayed = 0;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
@@ -250,24 +250,37 @@ void setup() {
   StopWiFi();
   Serial.println("Weather data received");
 
-  //check for Bday
-  Serial.println("Bday check: " + String(eeprom_read_string(BDAY_NAME_ADDR, 32)) + " - " + String(eeprom_read_string(BDAY_DATE_ADDR, 32)));
-  if (is_today_birthday() == true && bday_displayed == false) {
-    bday_displayed = true;
-    Serial.println("Today is a birthday of: " + String(eeprom_read_string(BDAY_NAME_ADDR, 32)));
-    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-    drawString(20, 20, String("Sunny B-day " + eeprom_read_string(BDAY_NAME_ADDR, 32)) + "!!!", LEFT);
-    Sunny(115, 70, Large, "01");         
-    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    drawString(20, 105, String("press Next to continue..."), LEFT);
-    display.display(false);
-    buttonWake_cnt = -1;
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
-    delay(500);
-    esp_deep_sleep_start();
-  }else {
+  //check for up to 4 Bdays
+  const int bday_name_addrs[4] = {BDAY1_NAME_ADDR, BDAY2_NAME_ADDR, BDAY3_NAME_ADDR, BDAY4_NAME_ADDR};
+  const int bday_date_addrs[4] = {BDAY1_DATE_ADDR, BDAY2_DATE_ADDR, BDAY3_DATE_ADDR, BDAY4_DATE_ADDR};
+  uint8_t bday_found = 0;
+  for (int i = 0; i < 4; i++) {
+    String bday_name = eeprom_read_string(bday_name_addrs[i], 16);
+    String bday_date = eeprom_read_string(bday_date_addrs[i], 8);
+    Serial.println("Bday check: " + bday_name + " - " + bday_date);
+    if (is_today_birthday(bday_date) && bday_name.length() > 0) {
+      bday_found = i;
+      if(bday_displayed != bday_found){
+        Serial.println("Today is a birthday of: " + bday_name);
+        u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+        drawString(20, 20, String("Sunny B-day " + bday_name) + "!!!", LEFT);
+        Sunny(115, 70, Large, "01");         
+        u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+        drawString(20, 105, String("press Next to continue..."), LEFT);
+        display.display(false);
+        buttonWake_cnt = -1;
+        bday_displayed = i;
+        esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+        delay(500);
+        esp_deep_sleep_start();
+      }
+    }
+  }
+  if (bday_found == 0) {
+    bday_displayed = 0;
     Serial.println("No birthday today");
   }
+  
 
   //update display on wakeup
   if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
@@ -304,8 +317,8 @@ void loop() {
   // and will wake up based on the button press or timer.
 }
 //#########################################################################################
-bool is_today_birthday() {
-  String bday = eeprom_read_string(BDAY_DATE_ADDR, 8); // format "dd.mm"
+bool is_today_birthday(String bday) {
+  //String bday = eeprom_read_string(BDAY_DATE_ADDR, 8); // format "dd.mm"
   if (bday.length() != 5) return false;
   // time_t now = time(NULL);
   // struct tm *now_tm = localtime(&now);
