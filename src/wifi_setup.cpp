@@ -274,7 +274,7 @@ void handle_bday_root() {
   for (int i = 0; i < 4; i++) {
     String name = eeprom_read_string((i==0)?BDAY1_NAME_ADDR:(i==1)?BDAY2_NAME_ADDR:(i==2)?BDAY3_NAME_ADDR:BDAY4_NAME_ADDR, 16);
     String bday = eeprom_read_string((i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR, 8);
-    form += html_input(String("bday_name"+String(i+1)).c_str(), name, false, String("name "+String(i+1)).c_str(),  "(max. 10 characters)"); //longer than 10 characters won't fit
+    form += html_input(String("bday_name"+String(i+1)).c_str(), name, false, String("name "+String(i+1)).c_str(),  "(max. ~10 characters)"); //longer than 10 characters won't fit
     form += html_input(String("bday_date"+String(i+1)).c_str(), bday, false, String("birthday (dd.mm) "+String(i+1)).c_str(), "(e.g. 24.12)");
   }
   form += "</fieldset>";

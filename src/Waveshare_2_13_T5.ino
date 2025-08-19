@@ -117,7 +117,7 @@ HL_record_type  HLReadings[max_readings];
 #define BUTTON_PIN 39
 //#define LED_PIN    19 //this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR bool first_boot = true;
-RTC_DATA_ATTR volatile int8_t bday_displayed = 0;
+RTC_DATA_ATTR volatile int8_t bday_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
@@ -258,15 +258,15 @@ void setup() {
     String bday_name = eeprom_read_string(bday_name_addrs[i], 16);
     String bday_date = eeprom_read_string(bday_date_addrs[i], 8);
     Serial.println("Bday check: " + bday_name + " - " + bday_date);
-    if (is_today_birthday(bday_date) && bday_name.length() > 0) {
+    if (bday_date== String(date_dd_mm_str) && bday_name.length() > 0) {
       bday_found = i;
       if(bday_displayed != bday_found){
         Serial.println("Today is a birthday of: " + bday_name);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-        drawString(20, 20, String("Sunny B-day " + bday_name) + "!!!", LEFT);
+        drawString(10, 20, String("Sunny B-day " + bday_name) + "!!!", LEFT);
         Sunny(115, 70, Large, "01");         
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-        drawString(20, 105, String("press Next to continue..."), LEFT);
+        drawString(10, 105, String("press Next to continue..."), LEFT);
         display.display(false);
         buttonWake_cnt = -1;
         bday_displayed = i;
@@ -277,7 +277,7 @@ void setup() {
     }
   }
   if (bday_found == 255) {
-    bday_displayed = 0;
+    bday_displayed = 255;
     Serial.println("No birthday today");
   }
   
