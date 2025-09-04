@@ -33,9 +33,9 @@ The values will be stored in the EEPROM permanently (even after power loss). Era
 
 ![Setup page](./LilyGo_213_weather_station_setup.jpg)
 
-## Popup greeting messages
+## Popup messages
 
-To set up a recurring birthday greeting for a person (upt to four), open the (hidden) Popup setup page, while being connected to "weather_station_wifi":
+To set up a yearly recurring popup message (up to four), open the (hidden) popup setup page while in setup mode:
 
 http://192.168.4.1/popups
 
