@@ -12,30 +12,6 @@
 
 extern int SleepDurationPreset;
 
-#define EEPROM_SIZE 1024
-#define SSID_ADDR   0
-#define PASS_ADDR   64
-#define APIKEY_ADDR 128
-#define LAT_ADDR    192
-#define LON_ADDR    224
-#define CITY_ADDR   256
-#define COUNTRY_ADDR 288
-#define LANGUAGE_ADDR 320
-#define HEMISPHERE_ADDR 352
-#define UNITS_ADDR 384
-#define TIMEZONE_ADDR 416
-#define NTPSERVER_ADDR 448
-#define GMTOFFSET_ADDR 480
-#define DAYLIGHT_ADDR 484
-#define SLEEPDURATION_ADDR 488
-#define BUTTON_PIN 39
-
-#define EEPROM_MARKER_ADDR 550
-#define EEPROM_MARKER_VALUE 0xA5
-
-#define BDAY_NAME_ADDR 492
-#define BDAY_DATE_ADDR 524
-
 WebServer wifiServer(80);
 
 // Helper to read/write String to EEPROM
@@ -58,6 +34,7 @@ void load_wifi_config() {
   EEPROM.begin(EEPROM_SIZE);
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized) {
+    erase_eeprom(EEPROM_SIZE, 0x00); // Initialize EEPROM with default values
     // EEPROM empty, use owm_credentials.h and save to EEPROM
     eeprom_write_string(SSID_ADDR, String(::ssid), 64);
     eeprom_write_string(PASS_ADDR, String(::password), 64);
@@ -84,11 +61,6 @@ void load_wifi_config() {
     EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((SleepDurationPreset >> 24) & 0xFF));
     EEPROM.write(EEPROM_MARKER_ADDR, EEPROM_MARKER_VALUE); // Set marker
     EEPROM.commit();
-    String name = "Jupiter";
-    String bday = "30.02";
-    EEPROM.begin(EEPROM_SIZE); // Ensure EEPROM is initialized with enough size
-    eeprom_write_string(BDAY_NAME_ADDR, name, 32);
-    eeprom_write_string(BDAY_DATE_ADDR, bday, 8);
   }
   // Load all config from EEPROM
   String ssid_str = eeprom_read_string(SSID_ADDR, 64);
@@ -297,19 +269,58 @@ const char* wifi_form_html_template = R"rawliteral(
 
 
 void handle_bday_root() {
-  String name = eeprom_read_string(BDAY_NAME_ADDR, 32);
-  String bday = eeprom_read_string(BDAY_DATE_ADDR, 8);
   String form = "";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup birthday greeting</legend>";
-  // Use html_input but override the action to /bday_save
-  form += html_input("bday_name", name, false, "name", nullptr);
-  form += html_input("bday_date", bday, false, "birthday (dd.mm)", "(e.g. 24.12)");
-  form += "</fieldset>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup birthday greetings</legend>";
+    for (int i = 0; i < 4; i++) {
+    String name = eeprom_read_string((i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR, 32);
+    String bday = eeprom_read_string((i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR, 8);
+
+    form += "<div style='margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #ddd;'>";
+
+    // message field
+    form += html_input(String("bday_msg"+String(i+1)).c_str(), name, false,
+                       String("message "+String(i+1)).c_str(), "");
+
+    // date field
+    form += html_input(String("bday_date"+String(i+1)).c_str(), bday, false,
+                       String("date"+String(i+1)).c_str(), "(dd.mm, e.g. 24.12)");
+
+    form += "</div>";
+  }
+  
+  // Counter script: puts a block counter under each message input and updates it in real time
+  form += "<script>"
+          "document.addEventListener('DOMContentLoaded',function(){"
+            "var sels=\"input[name^='bday_msg'],input[id^='bday_msg']\";"
+            "document.querySelectorAll(sels).forEach(function(el){"
+              "el.setAttribute('maxlength','22');"
+              "var counter=document.createElement('div');"
+              "counter.className='bday-counter';"
+              "counter.style.marginTop='4px';"
+              "counter.style.fontSize='0.85em';"
+              "counter.style.color='#666';"         // softer gray text
+              "counter.style.fontStyle='italic';"   // matches the (e.g. ...) hint style
+              // place under the entire field row
+              "var parent=el.parentElement;"
+              "var isFlex=parent && getComputedStyle(parent).display.indexOf('flex')>-1;"
+              "if(isFlex){"
+                "parent.insertAdjacentElement('afterend',counter);"
+              "}else{"
+                "el.insertAdjacentElement('afterend',counter);"
+              "}"
+              "var update=function(){ counter.textContent=(el.value||'').length + '/22'; };"
+              "['input','keyup','change'].forEach(function(ev){ el.addEventListener(ev,update); });"
+              "update();"
+            "});"
+          "});"
+          "</script>";
+
   form += "<form action='/' method='GET' class='btn-group'><button type='submit'>Back to Setup</button></form>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
   wifiServer.send(200, "text/html", html);
 }
+
 
 void handle_wifi_root() {
   String form = "";
@@ -424,13 +435,19 @@ void handle_wifi_save() {
       EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((val >> 16) & 0xFF));
       EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
-    if (field == "bday_name" && wifiServer.hasArg("bday_name")) {
-      Serial.println("Saving bday_name: " + wifiServer.arg("bday_name"));
-      eeprom_write_string(BDAY_NAME_ADDR, wifiServer.arg("bday_name"), 32);
-    }
-    if (field == "bday_date" && wifiServer.hasArg("bday_date")) {
-      Serial.println("Saving bday_date: " + wifiServer.arg("bday_date"));
-      eeprom_write_string(BDAY_DATE_ADDR, wifiServer.arg("bday_date"), 8);
+    for (int i = 0; i < 4; i++) {
+      String msg_field = String("bday_msg"+String(i+1));
+      String date_field = String("bday_date"+String(i+1));
+      int name_addr = (i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR;
+      int date_addr = (i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR;
+      if (field == msg_field && wifiServer.hasArg(msg_field)) {
+        Serial.println("Saving " + msg_field + ": " + wifiServer.arg(msg_field));
+        eeprom_write_string(name_addr, wifiServer.arg(msg_field), 32);
+      }
+      if (field == date_field && wifiServer.hasArg(date_field)) {
+        Serial.println("Saving " + date_field + ": " + wifiServer.arg(date_field));
+        eeprom_write_string(date_addr, wifiServer.arg(date_field), 8);
+      }
     }
     EEPROM.commit();
     Serial.println("EEPROM commit done. No page refresh.");
@@ -446,7 +463,14 @@ void handle_erase_eeprom() {
     EEPROM.write(i, 0xFF);
   }
   EEPROM.commit();
-  wifiServer.send(200, "text/html", "<h2>EEPROM erased. Please reboot the device.</h2>");
+  wifiServer.send(200, "text/html", "<h2>EEPROM filled with 0xFF. Please reboot the device.</h2>");
+}
+
+void erase_eeprom(int eeprom_size, byte erase_value){
+  for (int i = 0; i < eeprom_size; i++) {
+    EEPROM.write(i, erase_value);
+  }
+  EEPROM.commit();
 }
 
 void run_wifi_setup_portal() {

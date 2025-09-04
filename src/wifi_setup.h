@@ -17,15 +17,19 @@
 #define NTPSERVER_ADDR 448
 #define GMTOFFSET_ADDR 480
 #define DAYLIGHT_ADDR 484
-#define BUTTON_PIN 39
-#define LONG_PRESS_MS 2000
+#define SLEEPDURATION_ADDR 488
 
-#define EEPROM_MARKER_ADDR 550
+#define BDAY1_MSG_ADDR 492
+#define BDAY1_DATE_ADDR 524
+#define BDAY2_MSG_ADDR 532
+#define BDAY2_DATE_ADDR 564
+#define BDAY3_MSG_ADDR 572
+#define BDAY3_DATE_ADDR 604
+#define BDAY4_MSG_ADDR 612
+#define BDAY4_DATE_ADDR 644
+
+#define EEPROM_MARKER_ADDR 652
 #define EEPROM_MARKER_VALUE 0xA5
-
-#define BDAY_NAME_ADDR 492
-#define BDAY_DATE_ADDR 524
-
 
 // Starts the WiFi setup portal (webserver)
 void run_wifi_setup_portal();
@@ -33,6 +37,8 @@ void run_wifi_setup_portal();
 // Loads credentials and config from EEPROM or owm_credentials.h
 void load_wifi_config();
 
-String eeprom_read_string(int addr, int maxlen); 
+String eeprom_read_string(int addr, int maxlen);
+
+void erase_eeprom(int eeprom_size, byte value);
 
 #endif // WIFI_SETUP_H
