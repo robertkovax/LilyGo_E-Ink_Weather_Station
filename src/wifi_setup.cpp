@@ -271,18 +271,56 @@ const char* wifi_form_html_template = R"rawliteral(
 void handle_bday_root() {
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup birthday greetings</legend>";
-  for (int i = 0; i < 4; i++) {
-    String name = eeprom_read_string((i==0)?BDAY1_NAME_ADDR:(i==1)?BDAY2_NAME_ADDR:(i==2)?BDAY3_NAME_ADDR:BDAY4_NAME_ADDR, 16);
+    for (int i = 0; i < 4; i++) {
+    String name = eeprom_read_string((i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR, 32);
     String bday = eeprom_read_string((i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR, 8);
-    form += html_input(String("bday_name"+String(i+1)).c_str(), name, false, String("name "+String(i+1)).c_str(),  "(max. ~10 characters)"); //longer than 10 characters won't fit
-    form += html_input(String("bday_date"+String(i+1)).c_str(), bday, false, String("birthday (dd.mm) "+String(i+1)).c_str(), "(e.g. 24.12)");
+
+    form += "<div style='margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #ddd;'>";
+
+    // message field
+    form += html_input(String("bday_msg"+String(i+1)).c_str(), name, false,
+                       String("message "+String(i+1)).c_str(), "");
+
+    // date field
+    form += html_input(String("bday_date"+String(i+1)).c_str(), bday, false,
+                       String("date"+String(i+1)).c_str(), "(dd.mm, e.g. 24.12)");
+
+    form += "</div>";
   }
-  form += "</fieldset>";
+  
+  // Counter script: puts a block counter under each message input and updates it in real time
+  form += "<script>"
+          "document.addEventListener('DOMContentLoaded',function(){"
+            "var sels=\"input[name^='bday_msg'],input[id^='bday_msg']\";"
+            "document.querySelectorAll(sels).forEach(function(el){"
+              "el.setAttribute('maxlength','22');"
+              "var counter=document.createElement('div');"
+              "counter.className='bday-counter';"
+              "counter.style.marginTop='4px';"
+              "counter.style.fontSize='0.85em';"
+              "counter.style.color='#666';"         // softer gray text
+              "counter.style.fontStyle='italic';"   // matches the (e.g. ...) hint style
+              // place under the entire field row
+              "var parent=el.parentElement;"
+              "var isFlex=parent && getComputedStyle(parent).display.indexOf('flex')>-1;"
+              "if(isFlex){"
+                "parent.insertAdjacentElement('afterend',counter);"
+              "}else{"
+                "el.insertAdjacentElement('afterend',counter);"
+              "}"
+              "var update=function(){ counter.textContent=(el.value||'').length + '/22'; };"
+              "['input','keyup','change'].forEach(function(ev){ el.addEventListener(ev,update); });"
+              "update();"
+            "});"
+          "});"
+          "</script>";
+
   form += "<form action='/' method='GET' class='btn-group'><button type='submit'>Back to Setup</button></form>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
   wifiServer.send(200, "text/html", html);
 }
+
 
 void handle_wifi_root() {
   String form = "";
@@ -398,13 +436,13 @@ void handle_wifi_save() {
       EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
     for (int i = 0; i < 4; i++) {
-      String name_field = String("bday_name"+String(i+1));
+      String msg_field = String("bday_msg"+String(i+1));
       String date_field = String("bday_date"+String(i+1));
-      int name_addr = (i==0)?BDAY1_NAME_ADDR:(i==1)?BDAY2_NAME_ADDR:(i==2)?BDAY3_NAME_ADDR:BDAY4_NAME_ADDR;
+      int name_addr = (i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR;
       int date_addr = (i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR;
-      if (field == name_field && wifiServer.hasArg(name_field)) {
-        Serial.println("Saving " + name_field + ": " + wifiServer.arg(name_field));
-        eeprom_write_string(name_addr, wifiServer.arg(name_field), 16);
+      if (field == msg_field && wifiServer.hasArg(msg_field)) {
+        Serial.println("Saving " + msg_field + ": " + wifiServer.arg(msg_field));
+        eeprom_write_string(name_addr, wifiServer.arg(msg_field), 32);
       }
       if (field == date_field && wifiServer.hasArg(date_field)) {
         Serial.println("Saving " + date_field + ": " + wifiServer.arg(date_field));

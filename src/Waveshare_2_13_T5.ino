@@ -251,22 +251,22 @@ void setup() {
   Serial.println("Weather data received");
 
   //check for up to 4 Bdays
-  const int bday_name_addrs[4] = {BDAY1_NAME_ADDR, BDAY2_NAME_ADDR, BDAY3_NAME_ADDR, BDAY4_NAME_ADDR};
+  const int bday_msg_addrs[4] = {BDAY1_MSG_ADDR, BDAY2_MSG_ADDR, BDAY3_MSG_ADDR, BDAY4_MSG_ADDR};
   const int bday_date_addrs[4] = {BDAY1_DATE_ADDR, BDAY2_DATE_ADDR, BDAY3_DATE_ADDR, BDAY4_DATE_ADDR};
   uint8_t bday_found = 255;
   for (int i = 0; i < 4; i++) {
-    String bday_name = eeprom_read_string(bday_name_addrs[i], 16);
+    String bday_msg = eeprom_read_string(bday_msg_addrs[i], 32);
     String bday_date = eeprom_read_string(bday_date_addrs[i], 8);
-    Serial.println("Bday check: " + bday_name + " - " + bday_date);
-    if (bday_date== String(date_dd_mm_str) && bday_name.length() > 0) {
+    Serial.println("Bday check: " + bday_msg + " - " + bday_date);
+    if (bday_date== String(date_dd_mm_str) && bday_msg.length() > 0) {
       bday_found = i;
       if(bday_displayed != bday_found){
-        Serial.println("Today is a birthday of: " + bday_name);
+        Serial.println("msg: " + bday_msg);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-        drawString(10, 20, String("Sunny B-day " + bday_name) + "!!!", LEFT);
+        drawString(10, 20, String(bday_msg), LEFT);
         Sunny(115, 70, Large, "01");         
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-        drawString(10, 105, String("press Next to continue..."), LEFT);
+        drawString(35, 105, String("press Next to continue..."), LEFT);
         display.display(false);
         buttonWake_cnt = -1;
         bday_displayed = i;
@@ -427,7 +427,7 @@ void BeginSleep(long _sleepDuration) {
   // Enable wakeup by timer and by button (ext0)
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
   long SleepTimer = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((SleepTimer+30) * 1000000LL); // Added 30-sec extra delay to cater for slow ESP32 RTC timers
+  esp_sleep_enable_timer_wakeup((SleepTimer+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
 #ifdef BUILTIN_LED
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
