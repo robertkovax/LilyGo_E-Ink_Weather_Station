@@ -1,7 +1,7 @@
 //Here are the WiFi credentials loaded from EEPROM (or owm_credentials.h at first boot after programming).
 //It provides a web interface for setting up the WiFi credentials, OpenWeatherMap API key, location data, and refresh period.
 //The web interface is accessible at http://192.168.4.1
-//Birthday greeting setup at: at http://192.168.4.1/bday (You can set up a birthday greeting that occurs every year.)
+//Birthday greeting setup at: at http://192.168.4.1/popups (You can set up a birthday greeting that occurs every year.)
 //You can also erase the EEPROM to reset all settings to default values: http://192.168.4.1/erase_eeprom
 
 #include "wifi_setup.h"
@@ -268,22 +268,22 @@ const char* wifi_form_html_template = R"rawliteral(
 )rawliteral";
 
 
-void handle_bday_root() {
+void handle_popups_root() {
   String form = "";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup birthday greetings</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup Popup Messages</legend>";
     for (int i = 0; i < 4; i++) {
-    String name = eeprom_read_string((i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR, 32);
-    String bday = eeprom_read_string((i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR, 8);
+    String message = eeprom_read_string((i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR, 32);
+    String date = eeprom_read_string((i==0)?POPUP1_DATE_ADDR:(i==1)?POPUP2_DATE_ADDR:(i==2)?POPUP3_DATE_ADDR:POPUP4_DATE_ADDR, 8);
 
     form += "<div style='margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #ddd;'>";
 
     // message field
-    form += html_input(String("bday_msg"+String(i+1)).c_str(), name, false,
-                       String("message "+String(i+1)).c_str(), "");
+    form += html_input(String("popup_msg"+String(i+1)).c_str(), message, false,
+                       String("popup message "+String(i+1)).c_str(), "");
 
     // date field
-    form += html_input(String("bday_date"+String(i+1)).c_str(), bday, false,
-                       String("date"+String(i+1)).c_str(), "(dd.mm, e.g. 24.12)");
+    form += html_input(String("popup_date"+String(i+1)).c_str(), date, false,
+                       String("on date ").c_str(), "(dd.mm, e.g. 24.12)");
 
     form += "</div>";
   }
@@ -291,11 +291,11 @@ void handle_bday_root() {
   // Counter script: puts a block counter under each message input and updates it in real time
   form += "<script>"
           "document.addEventListener('DOMContentLoaded',function(){"
-            "var sels=\"input[name^='bday_msg'],input[id^='bday_msg']\";"
+            "var sels=\"input[name^='popup_msg'],input[id^='popup_msg']\";"
             "document.querySelectorAll(sels).forEach(function(el){"
-              "el.setAttribute('maxlength','22');"
+              "el.setAttribute('maxlength','24');"
               "var counter=document.createElement('div');"
-              "counter.className='bday-counter';"
+              "counter.className='character-counter';"
               "counter.style.marginTop='4px';"
               "counter.style.fontSize='0.85em';"
               "counter.style.color='#666';"         // softer gray text
@@ -308,7 +308,7 @@ void handle_bday_root() {
               "}else{"
                 "el.insertAdjacentElement('afterend',counter);"
               "}"
-              "var update=function(){ counter.textContent=(el.value||'').length + '/22'; };"
+              "var update=function(){ counter.textContent=(el.value||'').length + '/24'; };"
               "['input','keyup','change'].forEach(function(ev){ el.addEventListener(ev,update); });"
               "update();"
             "});"
@@ -436,10 +436,10 @@ void handle_wifi_save() {
       EEPROM.write(SLEEPDURATION_ADDR+3, (uint8_t)((val >> 24) & 0xFF));
     }
     for (int i = 0; i < 4; i++) {
-      String msg_field = String("bday_msg"+String(i+1));
-      String date_field = String("bday_date"+String(i+1));
-      int name_addr = (i==0)?BDAY1_MSG_ADDR:(i==1)?BDAY2_MSG_ADDR:(i==2)?BDAY3_MSG_ADDR:BDAY4_MSG_ADDR;
-      int date_addr = (i==0)?BDAY1_DATE_ADDR:(i==1)?BDAY2_DATE_ADDR:(i==2)?BDAY3_DATE_ADDR:BDAY4_DATE_ADDR;
+      String msg_field = String("popup_msg"+String(i+1));
+      String date_field = String("popup_date"+String(i+1));
+      int name_addr = (i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR;
+      int date_addr = (i==0)?POPUP1_DATE_ADDR:(i==1)?POPUP2_DATE_ADDR:(i==2)?POPUP3_DATE_ADDR:POPUP4_DATE_ADDR;
       if (field == msg_field && wifiServer.hasArg(msg_field)) {
         Serial.println("Saving " + msg_field + ": " + wifiServer.arg(msg_field));
         eeprom_write_string(name_addr, wifiServer.arg(msg_field), 32);
@@ -481,7 +481,7 @@ void run_wifi_setup_portal() {
   wifiServer.on("/save", HTTP_POST, handle_wifi_save);
   wifiServer.on("/reboot", HTTP_POST, handle_wifi_reboot);
   wifiServer.on("/refresh", HTTP_POST, handle_wifi_refresh);
-  wifiServer.on("/bday", HTTP_GET, handle_bday_root);
+  wifiServer.on("/popups", HTTP_GET, handle_popups_root);
   wifiServer.on("/erase_eeprom", HTTP_GET, handle_erase_eeprom);
   wifiServer.begin();
   Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");

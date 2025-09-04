@@ -9,7 +9,7 @@ This directory is a fork of David Bird’s ESP32-e-Paper Weather Display project
 - Improved icons (night icons are displayed with a moon symbol instead of a sun).
 - Updated display layout for improved readability (optimized for LilyGo 2.13" 250x122 e-Paper display)
 
-- **Birthday greeting feature:** displays a recurring message every year on a set date.
+- **Popup greetings feature:** displays a recurring message every year on a set date (e.g. birthday greeting).
 
 ## Housing 3D model
 
@@ -33,13 +33,13 @@ The values will be stored in the EEPROM permanently (even after power loss). Era
 
 ![Setup page](./LilyGo_213_weather_station_setup.jpg)
 
-## B-day greeting
+## Popup greeting messages
 
-To set up a recurring birthday greeting for a person (upt to four), open the (hidden) Bday setup page, while being connected to "weather_station_wifi":
+To set up a recurring birthday greeting for a person (upt to four), open the (hidden) Popup setup page, while being connected to "weather_station_wifi":
 
-http://192.168.4.1/bday
+http://192.168.4.1/popups
 
-![Bday setup](./LilyGo_213_Bday_setup.jpg)
+![Bday setup](./LilyGo_213_popups_setup.jpg)
 
 This will show your greeting message every year on the set date:
 

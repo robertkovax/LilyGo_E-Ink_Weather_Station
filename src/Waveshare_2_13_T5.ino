@@ -26,7 +26,7 @@
 // + Cycle through "current day", "next day" and "4-day" forecast view on button press. 
 // + Long-press brings up the 4-day forecast right away. 
 // + update wifi credentials via wifi webserver "weather_station_wifi" http://192.168.4.1
-// + birthday greeting setup: http://192.168.4.1/bday
+// + birthday greeting setup: http://192.168.4.1/popups
 // + improved weather icons
 // + display low battery warning and enables deep sleep to prevent depleeting the battery
 // + display wifi connection failure msg
@@ -117,7 +117,7 @@ HL_record_type  HLReadings[max_readings];
 #define BUTTON_PIN 39
 //#define LED_PIN    19 //this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR bool first_boot = true;
-RTC_DATA_ATTR volatile int8_t bday_displayed = 255;
+RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
@@ -250,34 +250,34 @@ void setup() {
   StopWiFi();
   Serial.println("Weather data received");
 
-  //check for up to 4 Bdays
-  const int bday_msg_addrs[4] = {BDAY1_MSG_ADDR, BDAY2_MSG_ADDR, BDAY3_MSG_ADDR, BDAY4_MSG_ADDR};
-  const int bday_date_addrs[4] = {BDAY1_DATE_ADDR, BDAY2_DATE_ADDR, BDAY3_DATE_ADDR, BDAY4_DATE_ADDR};
-  uint8_t bday_found = 255;
+  //check for up to 4 popup meassages
+  const int popup_msg_addrs[4] = {POPUP1_MSG_ADDR, POPUP2_MSG_ADDR, POPUP3_MSG_ADDR, POPUP4_MSG_ADDR};
+  const int popup_date_addrs[4] = {POPUP1_DATE_ADDR, POPUP2_DATE_ADDR, POPUP3_DATE_ADDR, POPUP4_DATE_ADDR};
+  uint8_t popup_found = 255;
   for (int i = 0; i < 4; i++) {
-    String bday_msg = eeprom_read_string(bday_msg_addrs[i], 32);
-    String bday_date = eeprom_read_string(bday_date_addrs[i], 8);
-    Serial.println("Bday check: " + bday_msg + " - " + bday_date);
-    if (bday_date== String(date_dd_mm_str) && bday_msg.length() > 0) {
-      bday_found = i;
-      if(bday_displayed != bday_found){
-        Serial.println("msg: " + bday_msg);
+    String popup_msg = eeprom_read_string(popup_msg_addrs[i], 32);
+    String popup_date = eeprom_read_string(popup_date_addrs[i], 8);
+    Serial.println("popup check: " + popup_msg + " - " + popup_date);
+    if (popup_date== String(date_dd_mm_str) && popup_msg.length() > 0) {
+      popup_found = i;
+      if(popup_displayed != popup_found){
+        Serial.println("msg: " + popup_msg);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-        drawString(10, 20, String(bday_msg), LEFT);
+        drawString(10, 20, String(popup_msg), LEFT);
         Sunny(115, 70, Large, "01");         
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
         drawString(35, 105, String("press Next to continue..."), LEFT);
         display.display(false);
         buttonWake_cnt = -1;
-        bday_displayed = i;
+        popup_displayed = i;
         esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
         delay(500);
         esp_deep_sleep_start();
       }
     }
   }
-  if (bday_found == 255) {
-    bday_displayed = 255;
+  if (popup_found == 255) {
+    popup_displayed = 255;
     Serial.println("No birthday today");
   }
   
@@ -316,16 +316,7 @@ void loop() {
   // The program will go into deep sleep after setup() is completed
   // and will wake up based on the button press or timer.
 }
-//#########################################################################################
-bool is_today_birthday(String bday) {
-  //String bday = eeprom_read_string(BDAY_DATE_ADDR, 8); // format "dd.mm"
-  if (bday.length() != 5) return false;
-  // time_t now = time(NULL);
-  // struct tm *now_tm = localtime(&now);
-  // char today[6];
-  // snprintf(today, sizeof(today), "%02d.%02d", now_tm->tm_mday, now_tm->tm_mon + 1);
-  return (bday == String(date_dd_mm_str));
-}
+
 //#########################################################################################
 void Show4DayForecast() {
   Draw_Heading_Section();
