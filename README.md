@@ -35,24 +35,24 @@ The values will be stored in the EEPROM permanently (even after power loss). Era
 
 ## B-day greeting
 
-To set up a recurring birthday greeting for a person, open the (hidden) Bday setup page, while being connected to "weather_station_wifi":
+To set up a recurring birthday greeting for a person (upt to four), open the (hidden) Bday setup page, while being connected to "weather_station_wifi":
 
 http://192.168.4.1/bday
 
 ![Bday setup](./LilyGo_213_Bday_setup.jpg)
 
-This will show the following greeting message every year on the set date at the beginning of the day:
+This will show your greeting message every year on the set date:
 
 ![Bday greeting](./LilyGo_213_Bday_greeting.jpg)
 
 ## Hardware
-- ESP32 e-ink display module (~$20): https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper
+- ESP32 e-ink display module (~$15): https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper
 - Optional: LiPo or LiIon battery with Micro JST 1.25 connector (3.7V, 100-1000mAh)
 - 3D printed housing
 
 ## Notes
-- The default screen refresh period is set to 30 min. The controller is in deep sleep in between. This enables battery life for many months (possibly a year) on an 1000mAh 3.7V battery. 
+- The default screen refresh period is set to 30 min. The controller is in deep sleep in between. This enables battery life for a couple of months on an 1000mAh 3.7V battery. 
 
-- Recharge the battery via the micro USB plug.
+- Recharge the battery via the USB plug.
 
 - This port was built using PlatformIO in VScode.
