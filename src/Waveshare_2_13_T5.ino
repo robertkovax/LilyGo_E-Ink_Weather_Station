@@ -39,6 +39,7 @@
 #include "lang.h"   
 #include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
 #include <WiFi.h>            // Built-in
+#include "esp_wifi.h"
 #include "time.h"
 #include <SPI.h>
 #define  ENABLE_GxEPD2_display 0
@@ -678,8 +679,30 @@ void DrawPressureTrend(int x, int y, float pressure, String slope) {
 uint8_t StartWiFi() {
   Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
   IPAddress dns(8, 8, 8, 8); // Google DNS
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA); // switch off AP
+  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_MODE_STA);
+  esp_wifi_stop();         
+  esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, desiredMac);
+  if (err != ESP_OK) {
+    Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
+  } else {
+    Serial.printf("STA MAC set to: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  desiredMac[0],desiredMac[1],desiredMac[2],desiredMac[3],desiredMac[4],desiredMac[5]);
+  }
+  err = esp_wifi_start();
+  if (err != ESP_OK) {
+    Serial.printf("esp_wifi_start err=0x%02X\n", err);
+  }
+
+  // 5) Verify
+  uint8_t cur[6]; 
+  esp_wifi_get_mac(WIFI_IF_STA, cur);
+  Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
+
+
+
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   unsigned long start = millis();
