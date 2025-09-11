@@ -1,3 +1,4 @@
+#pragma once
 #ifndef FORECAST_RECORD_H_
 #define FORECAST_RECORD_H_
 

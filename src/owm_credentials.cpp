@@ -22,7 +22,7 @@ String City             = "";
 String Country          = "";
 String Language         = "EN";
 String Hemisphere       = "north";
-String Units            = "M";
+String Units            = "I"; //M = metric, else imperial
 
 // Choose your time zone from: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv 
 const char* Timezone    = "CET-1CEST,M3.5.0,M10.5.0/3"; 
