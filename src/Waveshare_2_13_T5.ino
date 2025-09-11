@@ -347,7 +347,7 @@ void ShowNextDayForecast() {
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 36, "weather tomorrow:", LEFT);
   for (int i = 3; i < MaxReadings - 4; i++) {
-    if (WxForecast[i].Period.substring(11, 13) == "09") { //find the start of the next day
+    if (WxForecast[i].Period.substring(11, 13) == "08") { //find the start of the next day
       Serial.println("Forecast for " + String(WxForecast[i].Period) + " = " + String(WxForecast[i].Temperature) + "C" + "pos = " + i);
       Draw_Next_Day_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
       Draw_Next_Day_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
@@ -429,11 +429,11 @@ void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable 
   Draw_Heading_Section();           // Top line of the display
   Draw_Main_Weather_Section();      // Centre section of display for Location, temperature, Weather report, Wx Symbol and wind direction
   //Index from 0, gets us more 'near' data.
-  Draw_3hr_Forecast(-3, 96, 1);    // First  3hr forecast box
-  Draw_3hr_Forecast(42, 96, 2);    // Second 3hr forecast box
-  Draw_3hr_Forecast(86, 96, 3);   // Third  3hr forecast box
-  Draw_3hr_Forecast(132, 96, 4);   // Fourth  3hr forecast box
-  Draw_3hr_Forecast(174, 96, 5);   // Fifth 3hr forecast box
+  Draw_3hr_Forecast(-3, 96, 0);    // First  3hr forecast box
+  Draw_3hr_Forecast(42, 96, 1);    // Second 3hr forecast box
+  Draw_3hr_Forecast(86, 96, 2);   // Third  3hr forecast box
+  Draw_3hr_Forecast(132, 96, 3);   // Fourth  3hr forecast box
+  Draw_3hr_Forecast(174, 96, 4);   // Fifth 3hr forecast box
   DisplayAstronomySection(142, 18); // Astronomy section Sun rise/set and Moon phase plus icon
   // Not really enough space for these
   //if (WxConditions[0].Visibility > 0) Visibility(110, 40, String(WxConditions[0].Visibility) + "M");
@@ -511,8 +511,8 @@ void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
 //#########################################################################################
 void DisplayAstronomySection(int x, int y) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, (Units == "M"?5:7)) + " " + TXT_SUNRISE, LEFT);
-  drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, (Units == "M"?5:7)) + " " + TXT_SUNSET, LEFT);
+  drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNRISE, LEFT);
+  drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNSET, LEFT);
   time_t now = time(NULL);
   struct tm * now_utc = gmtime(&now);
   const int day_utc   = now_utc->tm_mday;
@@ -579,7 +579,7 @@ void StopWiFi() {
 }
 //#########################################################################################
 boolean SetupTime() {
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
+  configTime(gmtOffset_h * 3600, daylightOffset_h * 3600, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
   setenv("TZ", Timezone, 1);  //setenv()adds the "TZ" variable to the environment with a value TimeZone, only used if set to 1, 0 means no change
   tzset(); // Set the TZ environment variable
   delay(100);

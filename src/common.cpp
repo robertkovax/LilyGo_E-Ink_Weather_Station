@@ -66,7 +66,16 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
       WxForecast[r].Rainfall    = list[r]["rain"]["3h"].as<float>();
       WxForecast[r].Snowfall    = list[r]["snow"]["3h"].as<float>();
       WxForecast[r].Pop         = list[r]["pop"].as<float>();
-      WxForecast[r].Period      = list[r]["dt_txt"].as<const char*>();
+
+      //adjust to local time (default is UTC)
+      setenv("TZ", "PST8PDT,M3.2.0/2,M11.1.0/2", 1); tzset();
+      time_t t = (time_t)list[r]["dt"].as<long>();
+      struct tm tm_info;
+      localtime_r(&t, &tm_info);
+      char buffer[20];
+      strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm_info);
+      WxForecast[r].Period = String(buffer);
+      //Serial.println("forecast period " + WxForecast[r].Period);
     }
 
     float pressure_trend = WxForecast[2].Pressure - WxForecast[0].Pressure; // slope between now and later
@@ -105,6 +114,9 @@ bool obtain_wx_data(WiFiClient& client, const String& requestType) {
   // API v2.5 endpoint (OneCall v3.0 comment kept from original)
   String uri = "/data/2.5/" + requestType + "?lat=" + LAT + "&lon=" + LON +
                "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
+
+  // Serial.print(weatherServer);
+  // Serial.println(uri.c_str());
 
   if (requestType != "weather") {
     uri += "&cnt=" + String(MaxReadings);

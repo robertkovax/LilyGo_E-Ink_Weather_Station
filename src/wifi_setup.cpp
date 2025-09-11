@@ -47,14 +47,14 @@ void load_wifi_config() {
     eeprom_write_string(UNITS_ADDR, ::Units, 8);
     eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
     eeprom_write_string(NTPSERVER_ADDR, String(::ntpServer), 32);
-    EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_sec >> 0) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+1, (uint8_t)((::gmtOffset_sec >> 8) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+2, (uint8_t)((::gmtOffset_sec >> 16) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+3, (uint8_t)((::gmtOffset_sec >> 24) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((::daylightOffset_sec >> 0) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_sec >> 8) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_sec >> 16) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_sec >> 24) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_h >> 0) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+1, (uint8_t)((::gmtOffset_h >> 8) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+2, (uint8_t)((::gmtOffset_h >> 16) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+3, (uint8_t)((::gmtOffset_h >> 24) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((::daylightOffset_h >> 0) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_h >> 8) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_h >> 16) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_h >> 24) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDurationPreset >> 0) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((SleepDurationPreset >> 8) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((SleepDurationPreset >> 16) & 0xFF));
@@ -88,8 +88,8 @@ void load_wifi_config() {
   Units = units_str;
   Timezone = strdup(timezone_str.c_str());
   ntpServer = strdup(ntpserver_str.c_str());
-  gmtOffset_sec = gmtOffset;
-  daylightOffset_sec = daylightOffset;
+  gmtOffset_h = gmtOffset;
+  daylightOffset_h = daylightOffset;
 }
 
 // Helper to get current config value for HTML
@@ -333,7 +333,7 @@ void handle_wifi_root() {
   String lat_val = eeprom_read_string(LAT_ADDR, 32);
   String lon_val = eeprom_read_string(LON_ADDR, 32);
   String city_val = eeprom_read_string(CITY_ADDR, 32);
-  String country_val = eeprom_read_string(COUNTRY_ADDR, 8);
+  String units_val = eeprom_read_string(UNITS_ADDR, 8);
   String hemisphere_val = eeprom_read_string(HEMISPHERE_ADDR, 8);
   String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
   String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24));
@@ -341,12 +341,12 @@ void handle_wifi_root() {
   String sleepduration_val = String(EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24));
   form += html_input("lat", lat_val, false, nullptr, nullptr);
   form += html_input("lon", lon_val, false, nullptr, nullptr);
-  form += html_input("city", city_val, false, nullptr, nullptr);
-  form += html_input("country", country_val, false, nullptr, nullptr);
+  form += html_input("city", city_val, false, "location", "name of the place to display");
+  form += html_input("units", units_val, false, nullptr, "M - metric (Celsius), I - imperial (Farenheit)");
   form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
   form += html_input("timezone", timezone_val, false, "time zone", "see: <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
-  form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [sec]", "(e.g. 3600 for GMT+1)");
-  form += html_input("daylight", daylight_val, false, "daylight saving offset [sec]", "(e.g. 3600 for 1 hour)");
+  form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [h]", "(e.g. -8 for GMT-8)");
+  form += html_input("daylight", daylight_val, false, "daylight saving offset [h]", "(e.g. 1 for 1 hour, 0 if not used)");
    form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh Period</legend>";
   form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 30 min)");
@@ -399,9 +399,9 @@ void handle_wifi_save() {
       Serial.println("Saving City: " + wifiServer.arg("city"));
       eeprom_write_string(CITY_ADDR, wifiServer.arg("city"), 32);
     }
-    if (field == "country" && wifiServer.hasArg("country")) {
-      Serial.println("Saving Country: " + wifiServer.arg("country"));
-      eeprom_write_string(COUNTRY_ADDR, wifiServer.arg("country"), 8);
+    if (field == "units" && wifiServer.hasArg("units")) {
+      Serial.println("Saving Units: " + wifiServer.arg("units"));
+      eeprom_write_string(UNITS_ADDR, wifiServer.arg("units"), 8);
     }
     if (field == "hemisphere" && wifiServer.hasArg("hemisphere")) {
       Serial.println("Saving Hemisphere: " + wifiServer.arg("hemisphere"));

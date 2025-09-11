@@ -14,7 +14,7 @@ extern String Hemisphere;
 extern String Units;
 extern const char* Timezone;
 extern const char* ntpServer;
-extern long gmtOffset_sec;
-extern int daylightOffset_sec;
+extern long gmtOffset_h;
+extern int daylightOffset_h;
 
 
