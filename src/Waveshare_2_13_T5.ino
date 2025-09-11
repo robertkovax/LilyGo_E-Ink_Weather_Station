@@ -129,15 +129,21 @@ void IRAM_ATTR handleButtonInterrupt() {
 void setup() {
   StartTime = millis();
   Serial.begin(115200);
-  Serial.println("Weather station active");
-  Serial.println("Wakeup cause: " + String(esp_sleep_get_wakeup_cause()));
-  if(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0)  { //  0 = Power on reset, 2 = External (button) interrupt, 4 = timer wakeup
-    buttonWake_cnt++;
-  }else{
-    buttonWake_cnt = 0;
+  Serial.println("Weather station active!");
+  Serial.print("Wakeup cause: ");
+  switch(esp_sleep_get_wakeup_cause()){
+    case 0: 
+      Serial.println("Power on / reset");
+      buttonWake_cnt = 0;
+      break;
+    case 2: 
+      Serial.println("External interrupt (button press)");
+      buttonWake_cnt++;
+      break;
+    case 4: Serial.println("Timer wakeup");
+      buttonWake_cnt = 0;
+      break;
   }
-  Serial.println("wake button cnt: ");
-  Serial.println(buttonWake_cnt);
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
@@ -182,9 +188,9 @@ void setup() {
   }
 
   byte reconnect_cnt = 0;
+  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
   bool RxWeather = false, RxForecast = false;
-  Serial.println("Attempt to get weather");
-  while (StartWiFi() != WL_CONNECTED) { 
+  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
     Serial.println("waiting for WiFi connection...");   
     if(reconnect_cnt > 1) {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
@@ -223,8 +229,7 @@ void setup() {
     get_time_cnt++;
     delay(500);
   }
-  Serial.println("Time set");
-
+ 
   byte get_weather_cnt = 0;
   WiFiClient client;
   while ((RxWeather == false || RxForecast == false)) {
@@ -256,18 +261,19 @@ void setup() {
   const int popup_date_addrs[4] = {POPUP1_DATE_ADDR, POPUP2_DATE_ADDR, POPUP3_DATE_ADDR, POPUP4_DATE_ADDR};
   uint8_t popup_found = 255;
   for (int i = 0; i < 4; i++) {
-    String popup_msg = eeprom_read_string(popup_msg_addrs[i], 32);
+    String popup_msg = eeprom_read_string(popup_msg_addrs[i], 48);
     String popup_date = eeprom_read_string(popup_date_addrs[i], 8);
     Serial.println("popup check: " + popup_msg + " - " + popup_date);
     if (popup_date== String(date_dd_mm_str) && popup_msg.length() > 0) {
       popup_found = i;
       if(popup_displayed != popup_found){
-        Serial.println("msg: " + popup_msg);
+        Serial.println("Today's popup: " + popup_msg);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-        drawString(10, 20, String(popup_msg), LEFT);
-        Sunny(115, 70, Large, "01");         
+       //drawString(10, 20, String(popup_msg), LEFT);
+        drawStringMaxWidth(10, 20, 170, popup_msg, LEFT);
+        Sunny(220, 35, Large, "01");         
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-        drawString(35, 105, String("press Next to continue..."), LEFT);
+        drawString(10, 110, String("press Next to continue..."), LEFT);
         display.display(false);
         buttonWake_cnt = -1;
         popup_displayed = i;
@@ -279,7 +285,7 @@ void setup() {
   }
   if (popup_found == 255) {
     popup_displayed = 255;
-    Serial.println("No birthday today");
+    Serial.println("No popup msg today");
   }
   
 
@@ -399,17 +405,17 @@ String GetForecastDay(int unix_time) {
 
 //#########################################################################################
 void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
-  Serial.println("Icon name: " + IconName);
-  if      (IconName == "01d" || IconName == "01n")  {Sunny(x, y, IconSize, IconName);         Serial.println("Sunny");}
-  else if (IconName == "02d" || IconName == "02n")  {MostlySunny(x, y, IconSize, IconName);   Serial.println("MostlySunny");}
-  else if (IconName == "03d" || IconName == "03n")  {MostlyCloudy(x, y, IconSize, IconName);  Serial.println("MostlyCloudy");}
-  else if (IconName == "04d" || IconName == "04n")  {Cloudy(x, y, IconSize, IconName);        Serial.println("Cloudy");}
-  else if (IconName == "09d" || IconName == "09n")  {ChanceRain(x, y, IconSize, IconName);    Serial.println("ChanceRain");}
-  else if (IconName == "10d" || IconName == "10n")  {Rain(x, y, IconSize, IconName);          Serial.println("Rain");}
-  else if (IconName == "11d" || IconName == "11n")  {Tstorms(x, y, IconSize, IconName);       Serial.println("Tstorms");}  
-  else if (IconName == "13d" || IconName == "13n")  {Snow(x, y, IconSize, IconName);          Serial.println("Snow");} 
-  else if (IconName == "50d" || IconName == "50n")  {Fog(x, y, IconSize, IconName);           Serial.println("Fog");}
-  else                                              {Nodata(x, y, IconSize, IconName);        Serial.println("Nodata");}
+  //Serial.println("Icon name: " + IconName);
+  if      (IconName == "01d" || IconName == "01n")  Sunny(x, y, IconSize, IconName);        //Serial.println("Sunny");}
+  else if (IconName == "02d" || IconName == "02n")  MostlySunny(x, y, IconSize, IconName);   //Serial.println("MostlySunny");}
+  else if (IconName == "03d" || IconName == "03n")  MostlyCloudy(x, y, IconSize, IconName);  //Serial.println("MostlyCloudy");}
+  else if (IconName == "04d" || IconName == "04n")  Cloudy(x, y, IconSize, IconName);        //Serial.println("Cloudy");}
+  else if (IconName == "09d" || IconName == "09n")  ChanceRain(x, y, IconSize, IconName);    //Serial.println("ChanceRain");}
+  else if (IconName == "10d" || IconName == "10n")  Rain(x, y, IconSize, IconName);          //Serial.println("Rain");}
+  else if (IconName == "11d" || IconName == "11n")  Tstorms(x, y, IconSize, IconName);       //Serial.println("Tstorms");}  
+  else if (IconName == "13d" || IconName == "13n")  Snow(x, y, IconSize, IconName);          //Serial.println("Snow");} 
+  else if (IconName == "50d" || IconName == "50n")  Fog(x, y, IconSize, IconName);           //Serial.println("Fog");}
+  else                                              Nodata(x, y, IconSize, IconName);        //Serial.println("Nodata");}
 }
 //#########################################################################################
 
@@ -425,8 +431,7 @@ void BeginSleep(long _sleepDuration) {
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep time");
-  Serial.println("Starting deep-sleep period...");
+  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep");
   delay(1000);
   esp_deep_sleep_start();  // Sleep for e.g. 30 minutes
 }
@@ -438,11 +443,7 @@ void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable 
   UpdateLocalTime();
   Draw_Heading_Section();           // Top line of the display
   Draw_Main_Weather_Section();      // Centre section of display for Location, temperature, Weather report, Wx Symbol and wind direction
-  //Gak, each forecast is about 45 wide, which means we can fit about 5.5 of them onto our 250 wide screen.
-  // Leaves us a little 25 wide gap on the right - let's see if we can find something to fill that out with.
-  //Index from 0, not 1 - gets us more useful 'near' data.
-  // For instance, indexing from 1 at 10am got us our first 3h prediction at 15:00, which is a *long* way off.
-  // Indexing from 0 made that 12:00, which is much more useful.
+  //Index from 0, gets us more 'near' data.
   Draw_3hr_Forecast(-3, 96, 1);    // First  3hr forecast box
   Draw_3hr_Forecast(42, 96, 2);    // Second 3hr forecast box
   Draw_3hr_Forecast(86, 96, 3);   // Third  3hr forecast box
@@ -676,32 +677,32 @@ void DrawPressureTrend(int x, int y, float pressure, String slope) {
 }
 
 //#########################################################################################
-uint8_t StartWiFi() {
+uint8_t StartWiFi(uint8_t mac[6]) {
   Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
   IPAddress dns(8, 8, 8, 8); // Google DNS
-  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
   WiFi.persistent(false);
   WiFi.mode(WIFI_MODE_STA);
-  esp_wifi_stop();         
-  esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, desiredMac);
-  if (err != ESP_OK) {
-    Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
-  } else {
-    Serial.printf("STA MAC set to: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                  desiredMac[0],desiredMac[1],desiredMac[2],desiredMac[3],desiredMac[4],desiredMac[5]);
+  if (mac[0] != 0x00 && mac[5] != 0x00){
+    esp_wifi_stop();         
+    esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, mac);
+    if (err != ESP_OK) {
+      Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
+    } else {
+      Serial.printf("STA MAC set to: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+    }
   }
-  err = esp_wifi_start();
+  
+  esp_err_t err = esp_wifi_start();
   if (err != ESP_OK) {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
 
-  // 5) Verify
-  uint8_t cur[6]; 
-  esp_wifi_get_mac(WIFI_IF_STA, cur);
-  Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
-
-
+  //Verify MAC
+  // uint8_t cur[6]; 
+  // esp_wifi_get_mac(WIFI_IF_STA, cur);
+  // Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+  //               cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
 
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
@@ -751,16 +752,11 @@ boolean UpdateLocalTime() {
   CurrentMin  = timeinfo.tm_min;
   CurrentSec  = timeinfo.tm_sec;
   //See http://www.cplusplus.com/reference/ctime/strftime/
+  Serial.print("Time set: ");
   Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S");      // Displays: Saturday, June 24 2017 14:05:49
-  Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06.17
+  //Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06
   if (Units == "M") {
-    if ((Language == "CZ") || (Language == "DE") || (Language == "NL") || (Language == "PL") || (Language == "GR"))  {
-      sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
-    }
-    else
-    {
-      sprintf(day_output, "%s  %02u-%s-%02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100);
-    }
+    sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
     strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);  // Creates: '@ 14:05', 24h, no am or pm or seconds.   and change from 30 to 8 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
     sprintf(time_output, "%s", update_time);
@@ -773,7 +769,7 @@ boolean UpdateLocalTime() {
     sprintf(time_output, "%s", update_time);
   }
   date_str = day_output;
-  date_dd_mm_str = dd_mm_output;
+  date_dd_mm_str = dd_mm_output; //only for popup check
   time_str = time_output;
   return true;
 }
@@ -1177,29 +1173,80 @@ void drawString(int x, int y, String text, alignmentType alignment) {
   u8g2Fonts.print(text);
 }
 //#########################################################################################
-void drawStringMaxWidth(int x, int y, unsigned int text_width, String text, alignmentType alignment) {
-  int16_t  x1, y1; //the bounds of x,y and w and h of the variable 'text' in pixels.
-  uint16_t w, h;
-  display.getTextBounds(text, x, y, &x1, &y1, &w, &h);
-  if (alignment == RIGHT)  x = x - w;
-  if (alignment == CENTER) x = x - w / 2;
-  u8g2Fonts.setCursor(x, y);
-  if (text.length() > text_width * 2) {
-    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    text_width = 42;
-    y = y - 3;
+// Assumes `alignmentType { LEFT, CENTER, RIGHT }`
+// and u8g2Fonts is already configured with the font you want.
+
+static uint16_t textPixelWidth(const String& s) {
+  // u8g2-for-TFT_eSPI exposes UTF-8 width
+  return u8g2Fonts.getUTF8Width(s.c_str());
+}
+
+void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align) {
+  // Split into words and wrap by pixel width
+  String lines[8];        // up to 8 lines; enlarge if you need more
+  int    line_count = 0;
+
+  String current = "";
+  int i = 0, n = text.length();
+  while (i < n) {
+    // read next "word" (sequence of non-space) and the following spaces
+    String word = "";
+    while (i < n && !isspace((unsigned char)text[i])) { word += text[i++]; }
+    String spaces = "";
+    while (i < n &&  isspace((unsigned char)text[i])) { spaces += text[i++]; }
+
+    // Try to append (preserve single space between words when wrapping)
+    String trial = current.isEmpty() ? word : current + " " + word;
+    if (current.isEmpty() && textPixelWidth(word) > max_w_px) {
+      // Single word too long: hard-break it
+      String chunk = "";
+      for (int k = 0; k < (int)word.length(); ++k) {
+        String tryChunk = chunk + word[k];
+        if (textPixelWidth(tryChunk) > max_w_px) {
+          if (line_count < 8) lines[line_count++] = chunk;
+          chunk = String(word[k]);
+        } else {
+          chunk = tryChunk;
+        }
+      }
+      current = chunk; // remainder of the long word becomes current line
+      continue;
+    }
+
+    if (textPixelWidth(trial) <= max_w_px) {
+      current = trial;
+    } else {
+      if (line_count < 8) lines[line_count++] = current;
+      current = word; // start new line with the word
+    }
   }
-  u8g2Fonts.println(text.substring(0, text_width));
-  if (text.length() > text_width) {
-    u8g2Fonts.setCursor(x, y + h + 15);
-    String secondLine = text.substring(text_width);
-    secondLine.trim(); // Remove any leading spaces
-    u8g2Fonts.println(secondLine);
+  if (!current.isEmpty() && line_count < 8) lines[line_count++] = current;
+
+  // Measure block width and line height from the active font
+  int16_t ascent  = u8g2Fonts.getFontAscent();
+  int16_t descent = u8g2Fonts.getFontDescent(); // usually negative
+  int line_h = (ascent - descent)*1.2;                // reliable line spacing
+
+  uint16_t block_w = 0;
+  for (int j = 0; j < line_count; ++j) {
+    uint16_t w = textPixelWidth(lines[j]);
+    if (w > block_w) block_w = w;
+  }
+
+  // Align the whole block
+  int draw_x = x;
+  if (align == CENTER) draw_x = x - (int)block_w / 2;
+  else if (align == RIGHT) draw_x = x - (int)block_w;
+
+  // Draw lines (u8g2Fonts.setCursor expects baseline coordinates)
+  for (int j = 0; j < line_count; ++j) {
+    u8g2Fonts.setCursor(draw_x, y + j * line_h);
+    u8g2Fonts.print(lines[j]);
   }
 }
+
 //#########################################################################################
 void InitialiseDisplay() {
-  //Serial.println("Begin InitialiseDisplay...");
   //display.init(115200, true, 0, false);
   display.init(0); //for older Waveshare HAT's
   SPI.end();
@@ -1213,50 +1260,4 @@ void InitialiseDisplay() {
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
   display.fillScreen(GxEPD_WHITE);
   display.setFullWindow();
-  //Serial.println("... End InitialiseDisplay");
 }
-
-/*
-  Version 6.0 reformatted to use u8g2 fonts
-  1.  Screen layout revised
-  2.  Made consitent with other versions specifically 7x5 variant
-  3.  Introduced Visibility in Metres, Cloud cover in % and RH in %
-  4.  Correct sunrise/sunset time when in imperial mode.
-
-  Version 6.1 Provided connection support for Waveshare ESP32 driver board
-
-  Version 6.2 Changed GxEPD2 initialisation from 115200 to 0
-  1.  display.init(115200); becomes display.init(0); to stop blank screen following update to GxEPD2
-
-  Version 6.3 changed u8g2 fonts selection
-   1.  Omitted 'FONT(' and added _tf to font names either Regular (R) or Bold (B)
-  
-  Version 6.4
-   1. Added an extra 20-secs sleep delay to allow for slow ESP32 RTC timers
-   
-   Version 6.5
-   1. Modified for GxEPD2
-
-*/
-
-
-  ///test icons
-  // DisplayWXicon(30, 44, "11d", LargeIcon); //WxConditions[0].Icon
-  // DisplayWXicon(107, 44, "50d", LargeIcon); //WxConditions[0].Icon
-  // DisplayWXicon(187, 44, "50n", LargeIcon); //WxConditions[0].Icon
-  // WxForecast[1].Icon = "50d"; //WxForecast[1].Icon
-  // WxForecast[2].Icon = "50n"; //WxForecast[2].Icon
-  // WxForecast[3].Icon = "10d"; //WxForecast[3].Icon
-  // WxForecast[4].Icon = "10n"; //WxForecast[4].Icon
-  // WxForecast[5].Icon = "11d"; //WxForecast[5].Icon
-  // WxForecast[6].Icon = "11n"; //WxForecast[5].Icon
-  // Draw_3hr_Forecast(-4, 96, 1);    // First  3hr forecast box
-  // Draw_3hr_Forecast(39, 96, 2);    // Second 3hr forecast box
-  // Draw_3hr_Forecast(82, 96, 3);   // Third  3hr forecast box
-  // Draw_3hr_Forecast(125, 96, 4);   // Fourth  3hr forecast box
-  // Draw_3hr_Forecast(168, 96, 5);   // Fifth 3hr forecast box
-  // Draw_3hr_Forecast(211, 96, 6);   // Fifth 3hr forecast box
-  // display.display(true);
-  // delay(1500);
-  // BeginSleep(sleepPeriod);
-  //end test

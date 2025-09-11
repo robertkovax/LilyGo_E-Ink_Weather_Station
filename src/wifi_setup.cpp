@@ -272,7 +272,7 @@ void handle_popups_root() {
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Setup Popup Messages</legend>";
     for (int i = 0; i < 4; i++) {
-    String message = eeprom_read_string((i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR, 32);
+    String message = eeprom_read_string((i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR, 48);
     String date = eeprom_read_string((i==0)?POPUP1_DATE_ADDR:(i==1)?POPUP2_DATE_ADDR:(i==2)?POPUP3_DATE_ADDR:POPUP4_DATE_ADDR, 8);
 
     form += "<div style='margin-bottom:24px; padding-bottom:12px; border-bottom:1px solid #ddd;'>";
@@ -293,7 +293,7 @@ void handle_popups_root() {
           "document.addEventListener('DOMContentLoaded',function(){"
             "var sels=\"input[name^='popup_msg'],input[id^='popup_msg']\";"
             "document.querySelectorAll(sels).forEach(function(el){"
-              "el.setAttribute('maxlength','24');"
+              "el.setAttribute('maxlength','45');"
               "var counter=document.createElement('div');"
               "counter.className='character-counter';"
               "counter.style.marginTop='4px';"
@@ -308,7 +308,7 @@ void handle_popups_root() {
               "}else{"
                 "el.insertAdjacentElement('afterend',counter);"
               "}"
-              "var update=function(){ counter.textContent=(el.value||'').length + '/24'; };"
+              "var update=function(){ counter.textContent=(el.value||'').length + '/45'; };"
               "['input','keyup','change'].forEach(function(ev){ el.addEventListener(ev,update); });"
               "update();"
             "});"
@@ -438,11 +438,11 @@ void handle_wifi_save() {
     for (int i = 0; i < 4; i++) {
       String msg_field = String("popup_msg"+String(i+1));
       String date_field = String("popup_date"+String(i+1));
-      int name_addr = (i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR;
+      int msg_addr = (i==0)?POPUP1_MSG_ADDR:(i==1)?POPUP2_MSG_ADDR:(i==2)?POPUP3_MSG_ADDR:POPUP4_MSG_ADDR;
       int date_addr = (i==0)?POPUP1_DATE_ADDR:(i==1)?POPUP2_DATE_ADDR:(i==2)?POPUP3_DATE_ADDR:POPUP4_DATE_ADDR;
       if (field == msg_field && wifiServer.hasArg(msg_field)) {
         Serial.println("Saving " + msg_field + ": " + wifiServer.arg(msg_field));
-        eeprom_write_string(name_addr, wifiServer.arg(msg_field), 32);
+        eeprom_write_string(msg_addr, wifiServer.arg(msg_field), 48);
       }
       if (field == date_field && wifiServer.hasArg(date_field)) {
         Serial.println("Saving " + date_field + ": " + wifiServer.arg(date_field));

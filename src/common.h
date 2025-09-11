@@ -119,6 +119,8 @@ bool obtain_wx_data(WiFiClient& client, const String& RequestType) {
   // Update for API 3.0 June '24
   // String uri = "/data/3.0/onecall?lat=" + LAT + "&lon=" + LON + "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
   String uri = "/data/2.5/" + RequestType + "?lat=" + LAT + "&lon=" + LON + "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
+  // Serial.print(weatherServer);
+  // Serial.println(uri.c_str());
   if(RequestType != "weather")
   {
     uri += "&cnt=" + String(max_readings);
