@@ -85,7 +85,7 @@ Forecast_record_type  WxForecast[max_readings];
 
 //this is here the initial value, it will be updated from the EEPROM  after setting a value in the web interface
 // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
-int SleepDurationPreset = 30; 
+int SleepDurationPreset = 60; 
 int SleepDuration;
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
 int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
@@ -273,7 +273,6 @@ void setup() {
     Serial.println("No popup msg today");
   }
   
-
   //update display on wakeup
   if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
   || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
@@ -317,7 +316,9 @@ void Show4DayForecast() {
 
   int forecastStart = 0, Dposition = 0;
   for (int i = 2; i < MaxReadings; i++) {
-    if (WxForecast[i].Period.substring(11, 13) == "09") { //find the start of the next day
+    if ((WxForecast[i].Period.substring(11, 13) == "07") || 
+    (WxForecast[i].Period.substring(11, 13) == "08") ||
+    (WxForecast[i].Period.substring(11, 13) == "09"))  { //find the start of the next day
       forecastStart = i; 
       break;
     }
@@ -351,7 +352,7 @@ void ShowNextDayForecast() {
     if ((WxForecast[i].Period.substring(11, 13) == "07") || 
     (WxForecast[i].Period.substring(11, 13) == "08") ||
     (WxForecast[i].Period.substring(11, 13) == "09"))  { 
-      Serial.println("Forecast for " + String(WxForecast[i].Period) + " = " + String(WxForecast[i].Temperature) + "C" + "pos = " + i);
+      Serial.println("Forecast for " + String(WxForecast[i].Period) + ", " + String(WxForecast[i].Temperature) + "C ," + "pos = " + i);
       Draw_Next_Day_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
       Draw_Next_Day_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
       Draw_Next_Day_3hr_Forecast(83, 96, i + 2);   // Third  3hr forecast box
@@ -446,7 +447,7 @@ void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable 
 void Draw_Heading_Section() {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   //display.drawRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,GxEPD_BLACK);
-  drawString(0, 1, City, LEFT);
+  drawString(0, 1, Location_name, LEFT);
   //drawString(0, 1, time_str, LEFT);
   drawString(SCREEN_WIDTH, 1, date_str, RIGHT);
   DrawBattery(80, 12);

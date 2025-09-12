@@ -3,14 +3,15 @@
 #define WIFI_SETUP_H
 #include <Arduino.h>
 
+extern int SleepDurationPreset;
+
 #define EEPROM_SIZE 1024
 #define SSID_ADDR   0
 #define PASS_ADDR   64
 #define APIKEY_ADDR 128
 #define LAT_ADDR    192
 #define LON_ADDR    224
-#define CITY_ADDR   256
-#define COUNTRY_ADDR 288
+#define LOCATION_ADDR   256
 #define LANGUAGE_ADDR 320
 #define HEMISPHERE_ADDR 352
 #define UNITS_ADDR 384

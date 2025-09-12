@@ -21,7 +21,6 @@ void   Convert_Readings_to_Imperial();
 bool   DecodeWeather(WiFiClient& json, const String& type);
 String ConvertUnixTime(int unix_time);
 bool   obtain_wx_data(WiFiClient& client, const String& requestType);
-String ConvertUnixTime(int unix_time);
 boolean UpdateLocalTime();
 
 float mm_to_inches(float value_mm);

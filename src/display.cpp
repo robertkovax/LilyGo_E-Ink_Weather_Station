@@ -17,9 +17,17 @@ void drawString(int x, int y, String text, alignmentType alignment) {
 //########################################################################################
 // Assumes `alignmentType { LEFT, CENTER, RIGHT }`
 // and u8g2Fonts is already configured with the font you want.
+
+static uint16_t textPixelWidth(const String& s) {
+  // u8g2-for-TFT_eSPI exposes UTF-8 width
+  return u8g2Fonts.getUTF8Width(s.c_str());
+}
+
 void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align) {
   // Split into words and wrap by pixel width
+  String lines[8];        // up to 8 lines; enlarge if you need more
   int    line_count = 0;
+
   String current = "";
   int i = 0, n = text.length();
   while (i < n) {
@@ -59,7 +67,7 @@ void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, ali
   // Measure block width and line height from the active font
   int16_t ascent  = u8g2Fonts.getFontAscent();
   int16_t descent = u8g2Fonts.getFontDescent(); // usually negative
-  int line_h = (ascent - descent)*1.2;                // reliable line spacing
+  int line_h = (ascent - descent) * 1.2;                // reliable line spacing
 
   uint16_t block_w = 0;
   for (int j = 0; j < line_count; ++j) {
@@ -77,11 +85,6 @@ void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, ali
     u8g2Fonts.setCursor(draw_x, y + j * line_h);
     u8g2Fonts.print(lines[j]);
   }
-}
-//#########################################################################################
-static uint16_t textPixelWidth(const String& s) {
-  // u8g2-for-TFT_eSPI exposes UTF-8 width
-  return u8g2Fonts.getUTF8Width(s.c_str());
 }
 //############################################################################################
 void DrawBattery(int x, int y) {

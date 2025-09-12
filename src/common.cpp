@@ -67,14 +67,14 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
       WxForecast[r].Snowfall    = list[r]["snow"]["3h"].as<float>();
       WxForecast[r].Pop         = list[r]["pop"].as<float>();
 
-      //adjust to local time (default is UTC)
-      setenv("TZ", "PST8PDT,M3.2.0/2,M11.1.0/2", 1); tzset();
-      time_t t = (time_t)list[r]["dt"].as<long>();
+      long tz_offset = root["city"]["timezone"].as<long>();  // offset in seconds from UTC
+      time_t t = (time_t)list[r]["dt"].as<long>() + tz_offset;
       struct tm tm_info;
-      localtime_r(&t, &tm_info);
+      gmtime_r(&t, &tm_info);
       char buffer[20];
       strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm_info);
       WxForecast[r].Period = String(buffer);
+
       //Serial.println("forecast period " + WxForecast[r].Period);
     }
 
@@ -90,8 +90,8 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
 
   return true;
 }
-
 //#########################################################################################
+//convert Unicx time to UTC time
 String ConvertUnixTime(int unix_time) {
   time_t tm = unix_time;
   struct tm* now_tm = gmtime(&tm);

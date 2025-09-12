@@ -10,8 +10,6 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-extern int SleepDurationPreset;
-
 WebServer wifiServer(80);
 
 // Helper to read/write String to EEPROM
@@ -41,9 +39,7 @@ void load_wifi_config() {
     eeprom_write_string(APIKEY_ADDR, ::apikey, 64);
     eeprom_write_string(LAT_ADDR, ::LAT, 32);
     eeprom_write_string(LON_ADDR, ::LON, 32);
-    eeprom_write_string(CITY_ADDR, ::City, 32);
-    eeprom_write_string(COUNTRY_ADDR, ::Country, 8);
-    eeprom_write_string(HEMISPHERE_ADDR, ::Hemisphere, 8);
+    eeprom_write_string(LOCATION_ADDR, ::Location_name, 32);
     eeprom_write_string(UNITS_ADDR, ::Units, 8);
     eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
     eeprom_write_string(NTPSERVER_ADDR, String(::ntpServer), 32);
@@ -68,9 +64,7 @@ void load_wifi_config() {
   String apikey_str = eeprom_read_string(APIKEY_ADDR, 64);
   String lat_str = eeprom_read_string(LAT_ADDR, 32);
   String lon_str = eeprom_read_string(LON_ADDR, 32);
-  String city_str = eeprom_read_string(CITY_ADDR, 32);
-  String country_str = eeprom_read_string(COUNTRY_ADDR, 8);
-  String hemisphere_str = eeprom_read_string(HEMISPHERE_ADDR, 8);
+  String location_str = eeprom_read_string(LOCATION_ADDR, 32);
   String units_str = eeprom_read_string(UNITS_ADDR, 8);
   String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
   String ntpserver_str = eeprom_read_string(NTPSERVER_ADDR, 32);
@@ -82,9 +76,7 @@ void load_wifi_config() {
   apikey = apikey_str;
   LAT = lat_str;
   LON = lon_str;
-  City = city_str;
-  Country = country_str;
-  Hemisphere = hemisphere_str;
+  Location_name = location_str;
   Units = units_str;
   Timezone = strdup(timezone_str.c_str());
   ntpServer = strdup(ntpserver_str.c_str());
@@ -332,18 +324,16 @@ void handle_wifi_root() {
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Geo Settings</legend>";
   String lat_val = eeprom_read_string(LAT_ADDR, 32);
   String lon_val = eeprom_read_string(LON_ADDR, 32);
-  String city_val = eeprom_read_string(CITY_ADDR, 32);
+  String location_val = eeprom_read_string(LOCATION_ADDR, 32);
   String units_val = eeprom_read_string(UNITS_ADDR, 8);
-  String hemisphere_val = eeprom_read_string(HEMISPHERE_ADDR, 8);
   String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
   String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24));
   String daylight_val = String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24));
   String sleepduration_val = String(EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24));
   form += html_input("lat", lat_val, false, nullptr, nullptr);
   form += html_input("lon", lon_val, false, nullptr, nullptr);
-  form += html_input("city", city_val, false, "location", "name of the place to display");
+  form += html_input("location", location_val, false, "location", "name of the place to display");
   form += html_input("units", units_val, false, nullptr, "M - metric (Celsius), I - imperial (Farenheit)");
-  form += html_input("hemisphere", hemisphere_val, false, nullptr, nullptr);
   form += html_input("timezone", timezone_val, false, "time zone", "see: <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [h]", "(e.g. -8 for GMT-8)");
   form += html_input("daylight", daylight_val, false, "daylight saving offset [h]", "(e.g. 1 for 1 hour, 0 if not used)");
@@ -395,17 +385,13 @@ void handle_wifi_save() {
       Serial.println("Saving Longitude: " + wifiServer.arg("lon"));
       eeprom_write_string(LON_ADDR, wifiServer.arg("lon"), 32);
     }
-    if (field == "city" && wifiServer.hasArg("city")) {
-      Serial.println("Saving City: " + wifiServer.arg("city"));
-      eeprom_write_string(CITY_ADDR, wifiServer.arg("city"), 32);
+    if (field == "location" && wifiServer.hasArg("location")) {
+      Serial.println("Saving location: " + wifiServer.arg("location"));
+      eeprom_write_string(LOCATION_ADDR, wifiServer.arg("location"), 32);
     }
     if (field == "units" && wifiServer.hasArg("units")) {
       Serial.println("Saving Units: " + wifiServer.arg("units"));
       eeprom_write_string(UNITS_ADDR, wifiServer.arg("units"), 8);
-    }
-    if (field == "hemisphere" && wifiServer.hasArg("hemisphere")) {
-      Serial.println("Saving Hemisphere: " + wifiServer.arg("hemisphere"));
-      eeprom_write_string(HEMISPHERE_ADDR, wifiServer.arg("hemisphere"), 8);
     }
     if (field == "timezone" && wifiServer.hasArg("timezone")) {
       Serial.println("Saving Timezone: " + wifiServer.arg("timezone"));
