@@ -346,8 +346,11 @@ void ShowNextDayForecast() {
   Draw_Heading_Section(); 
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 36, "weather tomorrow:", LEFT);
-  for (int i = 3; i < MaxReadings - 4; i++) {
-    if (WxForecast[i].Period.substring(11, 13) == "08") { //find the start of the next day
+  for (int i = 3; i < MaxReadings - 4; i++) { 
+    //find the start of the next day
+    if ((WxForecast[i].Period.substring(11, 13) == "07") || 
+    (WxForecast[i].Period.substring(11, 13) == "08") ||
+    (WxForecast[i].Period.substring(11, 13) == "09"))  { 
       Serial.println("Forecast for " + String(WxForecast[i].Period) + " = " + String(WxForecast[i].Temperature) + "C" + "pos = " + i);
       Draw_Next_Day_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
       Draw_Next_Day_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
@@ -440,25 +443,6 @@ void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable 
   //if (WxConditions[0].Cloudcover > 0) CloudCover(110, 55, WxConditions[0].Cloudcover);
 }
 //#########################################################################################
-// Help debug screen layout by drawing a grid of little crosses
-void Draw_Grid() {
-  int x, y;
-  const int grid_step = 10;
-
-  //Draw the screen border so we know how far we can push things out
-  display.drawLine(0, 0, SCREEN_WIDTH-1, 0, GxEPD_BLACK);  //across top
-  display.drawLine(0, SCREEN_HEIGHT-1, SCREEN_WIDTH-1, SCREEN_HEIGHT-1, GxEPD_BLACK); //across bottom
-  display.drawLine(0, 0, 0, SCREEN_HEIGHT-1, GxEPD_BLACK);  //lhs
-  display.drawLine(SCREEN_WIDTH-1, 0, SCREEN_WIDTH-1, SCREEN_HEIGHT-1, GxEPD_BLACK);  //rhs
-
-  for( x=grid_step; x<SCREEN_WIDTH; x+=grid_step ) {
-    for( y=grid_step; y<SCREEN_HEIGHT; y+=grid_step ) {
-      display.drawLine(x-1, y, x+1, y, GxEPD_BLACK);  //Horizontal line
-      display.drawLine(x, y-1, x, y+1, GxEPD_BLACK);  //Vertical line
-    }
-  }
-}
-//#########################################################################################
 void Draw_Heading_Section() {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   //display.drawRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,GxEPD_BLACK);
@@ -499,10 +483,9 @@ void Draw_3hr_Forecast(int x, int y, int index) {
 }
 //#########################################################################################
 void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
-  DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
+  DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 4, y - 28, WxForecast[index].Period.substring(11, 16), LEFT);
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
   display.drawLine(x + 44, y - 30, x + 44, y - 30 + 57 , GxEPD_BLACK);
   display.drawLine(x, y - 30 + 57, x + 44, y - 30 + 57 , GxEPD_BLACK);
@@ -586,115 +569,6 @@ boolean SetupTime() {
   bool TimeStatus = UpdateLocalTime();
   return TimeStatus;
 }
-//#########################################################################################
-boolean UpdateLocalTime() {
-  struct tm timeinfo;
-  char   time_output[30], day_output[30], dd_mm_output[10], update_time[30];
-  while (!getLocalTime(&timeinfo, 3000)) { // Wait for 5-sec for time to synchronise
-    Serial.println("Failed to obtain time");
-    return false;
-  }
-  CurrentHour = timeinfo.tm_hour;
-  CurrentMin  = timeinfo.tm_min;
-  CurrentSec  = timeinfo.tm_sec;
-  //See http://www.cplusplus.com/reference/ctime/strftime/
-  Serial.print("Time set: ");
-  Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S");      // Displays: Saturday, June 24 2017 14:05:49
-  //Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06
-  if (Units == "M") {
-    sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
-    strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);  // Creates: '@ 14:05', 24h, no am or pm or seconds.   and change from 30 to 8 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
-    sprintf(time_output, "%s", update_time);
-  }
-  else
-  {
-    strftime(day_output, sizeof(day_output), "%a %b-%d-%y", &timeinfo); // Creates  'Sat May-31-2019'
-    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
-    strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);        // Creates: '@ 02:05' - 24h, no seconds or am/pm
-    sprintf(time_output, "%s", update_time);
-  }
-  date_str = day_output;
-  date_dd_mm_str = dd_mm_output; //only for popup check
-  time_str = time_output;
-  return true;
-}
-//#########################################################################################
-
-
-//#########################################################################################
-// Assumes `alignmentType { LEFT, CENTER, RIGHT }`
-// and u8g2Fonts is already configured with the font you want.
-
-static uint16_t textPixelWidth(const String& s) {
-  // u8g2-for-TFT_eSPI exposes UTF-8 width
-  return u8g2Fonts.getUTF8Width(s.c_str());
-}
-
-void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align) {
-  // Split into words and wrap by pixel width
-  String lines[8];        // up to 8 lines; enlarge if you need more
-  int    line_count = 0;
-
-  String current = "";
-  int i = 0, n = text.length();
-  while (i < n) {
-    // read next "word" (sequence of non-space) and the following spaces
-    String word = "";
-    while (i < n && !isspace((unsigned char)text[i])) { word += text[i++]; }
-    String spaces = "";
-    while (i < n &&  isspace((unsigned char)text[i])) { spaces += text[i++]; }
-
-    // Try to append (preserve single space between words when wrapping)
-    String trial = current.isEmpty() ? word : current + " " + word;
-    if (current.isEmpty() && textPixelWidth(word) > max_w_px) {
-      // Single word too long: hard-break it
-      String chunk = "";
-      for (int k = 0; k < (int)word.length(); ++k) {
-        String tryChunk = chunk + word[k];
-        if (textPixelWidth(tryChunk) > max_w_px) {
-          if (line_count < 8) lines[line_count++] = chunk;
-          chunk = String(word[k]);
-        } else {
-          chunk = tryChunk;
-        }
-      }
-      current = chunk; // remainder of the long word becomes current line
-      continue;
-    }
-
-    if (textPixelWidth(trial) <= max_w_px) {
-      current = trial;
-    } else {
-      if (line_count < 8) lines[line_count++] = current;
-      current = word; // start new line with the word
-    }
-  }
-  if (!current.isEmpty() && line_count < 8) lines[line_count++] = current;
-
-  // Measure block width and line height from the active font
-  int16_t ascent  = u8g2Fonts.getFontAscent();
-  int16_t descent = u8g2Fonts.getFontDescent(); // usually negative
-  int line_h = (ascent - descent)*1.2;                // reliable line spacing
-
-  uint16_t block_w = 0;
-  for (int j = 0; j < line_count; ++j) {
-    uint16_t w = textPixelWidth(lines[j]);
-    if (w > block_w) block_w = w;
-  }
-
-  // Align the whole block
-  int draw_x = x;
-  if (align == CENTER) draw_x = x - (int)block_w / 2;
-  else if (align == RIGHT) draw_x = x - (int)block_w;
-
-  // Draw lines (u8g2Fonts.setCursor expects baseline coordinates)
-  for (int j = 0; j < line_count; ++j) {
-    u8g2Fonts.setCursor(draw_x, y + j * line_h);
-    u8g2Fonts.print(lines[j]);
-  }
-}
-
 //#########################################################################################
 void InitialiseDisplay() {
   //display.init(115200, true, 0, false);

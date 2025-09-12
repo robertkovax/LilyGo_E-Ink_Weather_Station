@@ -28,7 +28,11 @@ enum alignmentType {
 
 //------String------
 void drawString(int x, int y, String text, alignmentType alignment);
+void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align);
+static uint16_t textPixelWidth(const String& s);
 
+// -----Helper------
+void Draw_Grid();
 
 // ---- Battery ----
 void DrawBattery(int x, int y);
@@ -70,6 +74,8 @@ void DrawSmallWind(int x, int y, float angle, float windspeed);
 String WindDegToDirection(float winddirection);
 void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere);
 String MoonPhase(int d, int m, int y, String hemisphere);
+
+
 
 
 

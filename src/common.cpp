@@ -103,6 +103,39 @@ String ConvertUnixTime(int unix_time) {
   }
   return String(output);
 }
+//#########################################################################################
+boolean UpdateLocalTime() {
+  struct tm timeinfo;
+  char   time_output[30], day_output[30], dd_mm_output[10], update_time[30];
+  while (!getLocalTime(&timeinfo, 3000)) { // Wait for 5-sec for time to synchronise
+    Serial.println("Failed to obtain time");
+    return false;
+  }
+  CurrentHour = timeinfo.tm_hour;
+  CurrentMin  = timeinfo.tm_min;
+  CurrentSec  = timeinfo.tm_sec;
+  //See http://www.cplusplus.com/reference/ctime/strftime/
+  Serial.print("Time set: ");
+  Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S");      // Displays: Saturday, June 24 2017 14:05:49
+  //Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06
+  if (Units == "M") {
+    sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
+    strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);  // Creates: '@ 14:05', 24h, no am or pm or seconds.   and change from 30 to 8 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
+    sprintf(time_output, "%s", update_time);
+  }
+  else
+  {
+    strftime(day_output, sizeof(day_output), "%a %b-%d-%y", &timeinfo); // Creates  'Sat May-31-2019'
+    strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
+    strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);        // Creates: '@ 02:05' - 24h, no seconds or am/pm
+    sprintf(time_output, "%s", update_time);
+  }
+  date_str = day_output;
+  date_dd_mm_str = dd_mm_output; //only for popup check
+  time_str = time_output;
+  return true;
+}
 
 //#########################################################################################
 bool obtain_wx_data(WiFiClient& client, const String& requestType) {

@@ -14,7 +14,76 @@ void drawString(int x, int y, String text, alignmentType alignment) {
   u8g2Fonts.setCursor(x, y + h);
   u8g2Fonts.print(text);
 }
+//########################################################################################
+// Assumes `alignmentType { LEFT, CENTER, RIGHT }`
+// and u8g2Fonts is already configured with the font you want.
+void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align) {
+  // Split into words and wrap by pixel width
+  int    line_count = 0;
+  String current = "";
+  int i = 0, n = text.length();
+  while (i < n) {
+    // read next "word" (sequence of non-space) and the following spaces
+    String word = "";
+    while (i < n && !isspace((unsigned char)text[i])) { word += text[i++]; }
+    String spaces = "";
+    while (i < n &&  isspace((unsigned char)text[i])) { spaces += text[i++]; }
 
+    // Try to append (preserve single space between words when wrapping)
+    String trial = current.isEmpty() ? word : current + " " + word;
+    if (current.isEmpty() && textPixelWidth(word) > max_w_px) {
+      // Single word too long: hard-break it
+      String chunk = "";
+      for (int k = 0; k < (int)word.length(); ++k) {
+        String tryChunk = chunk + word[k];
+        if (textPixelWidth(tryChunk) > max_w_px) {
+          if (line_count < 8) lines[line_count++] = chunk;
+          chunk = String(word[k]);
+        } else {
+          chunk = tryChunk;
+        }
+      }
+      current = chunk; // remainder of the long word becomes current line
+      continue;
+    }
+
+    if (textPixelWidth(trial) <= max_w_px) {
+      current = trial;
+    } else {
+      if (line_count < 8) lines[line_count++] = current;
+      current = word; // start new line with the word
+    }
+  }
+  if (!current.isEmpty() && line_count < 8) lines[line_count++] = current;
+
+  // Measure block width and line height from the active font
+  int16_t ascent  = u8g2Fonts.getFontAscent();
+  int16_t descent = u8g2Fonts.getFontDescent(); // usually negative
+  int line_h = (ascent - descent)*1.2;                // reliable line spacing
+
+  uint16_t block_w = 0;
+  for (int j = 0; j < line_count; ++j) {
+    uint16_t w = textPixelWidth(lines[j]);
+    if (w > block_w) block_w = w;
+  }
+
+  // Align the whole block
+  int draw_x = x;
+  if (align == CENTER) draw_x = x - (int)block_w / 2;
+  else if (align == RIGHT) draw_x = x - (int)block_w;
+
+  // Draw lines (u8g2Fonts.setCursor expects baseline coordinates)
+  for (int j = 0; j < line_count; ++j) {
+    u8g2Fonts.setCursor(draw_x, y + j * line_h);
+    u8g2Fonts.print(lines[j]);
+  }
+}
+//#########################################################################################
+static uint16_t textPixelWidth(const String& s) {
+  // u8g2-for-TFT_eSPI exposes UTF-8 width
+  return u8g2Fonts.getUTF8Width(s.c_str());
+}
+//############################################################################################
 void DrawBattery(int x, int y) {
   uint8_t percentage = 100;
   float voltage = analogRead(35) / 4096.0 * 7.46;
@@ -539,5 +608,23 @@ void DrawPressureTrend(int x, int y, float pressure, String slope) {
   else if (slope == "-") {
     display.drawLine(x,  y, x + 4, y + 4, GxEPD_BLACK);
     display.drawLine(x + 4, y + 4, x + 8, y, GxEPD_BLACK);
+  }
+}
+// #########################################################################################
+// Help debug screen layout by drawing a grid of little crosses
+void Draw_Grid(int sreen_width, int screen_height) {
+  int x, y;
+  const int grid_step = 10;
+  //Draw the screen border so we know how far we can push things out
+  display.drawLine(0, 0, sreen_width-1, 0, GxEPD_BLACK);  //across top
+  display.drawLine(0, screen_height-1, sreen_width-1, screen_height-1, GxEPD_BLACK); //across bottom
+  display.drawLine(0, 0, 0, screen_height-1, GxEPD_BLACK);  //lhs
+  display.drawLine(sreen_width-1, 0, sreen_width-1, screen_height-1, GxEPD_BLACK);  //rhs
+
+  for( x=grid_step; x<sreen_width; x+=grid_step ) {
+    for( y=grid_step; y<screen_height; y+=grid_step ) {
+      display.drawLine(x-1, y, x+1, y, GxEPD_BLACK);  //Horizontal line
+      display.drawLine(x, y-1, x, y+1, GxEPD_BLACK);  //Vertical line
+    }
   }
 }
