@@ -24,6 +24,7 @@ bool   obtain_wx_data(WiFiClient& client, const String& requestType);
 boolean SetupTime();
 boolean UpdateLocalTime();
 String GetForecastDay(int unix_time);
+int tomorrowStartIndex(int preferHourStart);
 
 float mm_to_inches(float value_mm);
 float hPa_to_inHg(float value_hPa);

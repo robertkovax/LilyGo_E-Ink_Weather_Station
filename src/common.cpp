@@ -159,7 +159,20 @@ boolean UpdateLocalTime() {
   time_str = time_output;
   return true;
 }
+// ########################################################################################
+int tomorrowStartIndex(int preferHourStart = 6){
+  String currentDate = WxForecast[0].Period.substring(0, 10);
 
+  for (int i = 0; i < MaxReadings; i++) {
+    String date = WxForecast[i].Period.substring(0, 10);   // YYYY-MM-DD
+    int hour    = WxForecast[i].Period.substring(11, 13).toInt();
+    if (date != currentDate && hour >= preferHourStart) {
+        // First entry of the *next day* morning
+        return i;
+    }
+  }
+  return -1;
+}
 //#########################################################################################
 bool obtain_wx_data(WiFiClient& client, const String& requestType) {
   const String units = (Units == "M" ? "metric" : "imperial");

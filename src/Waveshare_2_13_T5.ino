@@ -35,8 +35,8 @@
 
 
 //TO DO
-// - implemnt get weather as function
-// - implemnt popup check as function
+// improve find next day 
+// update to One Call API 3.0
 
 
 #include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
@@ -149,6 +149,7 @@ void setup() {
       &dispInitTaskHandle,
       1                // core 1
   );
+  
 
   CheckBattAbovePercentage(10);
   isSetupMode();
@@ -163,7 +164,7 @@ void setup() {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
     get_weather_data("current");
-    DisplayWeather();
+    DisplayTodaysWeather();
     display.display(false);
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
@@ -192,6 +193,126 @@ void loop() {
   // The program will go into deep sleep after setup() is completed
   // and will wake up based on the button press or timer.
 }
+//#########################################################################################
+void DisplayTodaysWeather() {             // 2.13" e-paper display is 250x122 useable resolution
+  //Draw_Grid();
+  Draw_Heading_Section();           // Top line of the display
+  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon); //WxConditions[0].Icon
+  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+  drawString(0, 35, String(WxConditions[0].Temperature, 1) + "°", LEFT);
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(45, 35, "/ " + String(WxConditions[0].Humidity, 0) + "%", LEFT);
+  u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK); //Draw width of the 5 weather forcasts
+  for (int i = 0; i <= 4; i++){
+    Draw_3hr_Forecast(i*43, 96, i);
+  }
+  DisplayAstronomySection(144, 18); // Astronomy section Sun rise/set and Moon phase plus icon
+  DrawSmallWind(231, 75, WxConditions[0].Winddir, WxConditions[0].Windspeed);
+  DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
+}
+//#########################################################################################
+void ShowNextDayForecast() {
+  Draw_Heading_Section(); 
+  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+  drawString(3, 36, "weather tomorrow:", LEFT);
+  int startIndex = tomorrowStartIndex(6);
+  Serial.println("Forecast for " + String(WxForecast[startIndex].Period) + ", " + String(WxForecast[startIndex].Temperature) + "C ," + "pos = " + startIndex);
+  for (int i = 0; i <= 4; i++){
+    Draw_Next_Day_3hr_Forecast(i*43, 96, startIndex + i);
+  }
+  display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK); //Draw width of the 5 weather forcasts
+  DrawSmallWind(231, 75, WxForecast[startIndex + 1].Winddir, WxForecast[startIndex + 1].Windspeed);
+}
+//#########################################################################################
+void Show4DayForecast() {
+  Draw_Heading_Section();
+  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+  drawString(3, 33, "4-day forecast:", LEFT);
+  int forecastStart = tomorrowStartIndex(8);
+  int maxPos = 0, minPos = 0;
+  for (int DayIndex = 0; DayIndex < 4; DayIndex++) { //show 4 days
+    HLReadings[DayIndex].High  = WxForecast[forecastStart + (8 * DayIndex)].High; //init
+    HLReadings[DayIndex].Low  = WxForecast[forecastStart + (8 * DayIndex)].Low; //init
+    for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++) {
+      if (WxForecast[r].High >= HLReadings[DayIndex].High) {
+        HLReadings[DayIndex].High = WxForecast[r].High;
+        maxPos = r;
+      }
+      if (WxForecast[r].Low <= HLReadings[DayIndex].Low)  {
+        HLReadings[DayIndex].Low = WxForecast[r].Low;
+        minPos = r; //not used
+      }
+    }
+    Draw_4_Day_Forecast(28, 85, maxPos, DayIndex, 57); // x,y coordinates, forecast number, position, spacing width
+    Serial.println("Day " + String(DayIndex) + ": Max = " + String(HLReadings[DayIndex].High) + " Min = " + String(HLReadings[DayIndex].Low));
+  }
+}
+//#########################################################################################
+void Draw_Heading_Section() {
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(0, 1, Location_name, LEFT);
+  //drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
+  drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str + " " + time_str, RIGHT);
+  DrawBattery(80, 12);
+  display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
+}
+//#########################################################################################
+void Draw_3hr_Forecast(int x, int y, int index) {
+  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(x + 7, y - 21, WxForecast[index].Period.substring(11, 16), LEFT);
+  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+  drawString(x + 13, y + 18, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
+  display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52 , GxEPD_BLACK);
+  display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52 , GxEPD_BLACK);
+}
+//#########################################################################################
+void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
+  DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
+  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+  drawString(x + 4, y - 25, WxForecast[index].Period.substring(11, 16), LEFT);
+  drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
+  display.drawLine(x + 44, y - 32, x + 44, y - 32 + 57 , GxEPD_BLACK);
+}
+//######################################################################################### 
+void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth) {
+  x += fwidth * Dposition;
+  DisplayWXicon(x + 10, y + 5, WxForecast[forecast].Icon, SmallIcon); 
+  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+  String ForecastDay = GetForecastDay(WxForecast[forecast].Dt);
+  drawString(x + 8, y - 22, ForecastDay, CENTER);
+  drawString(x + 16, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
+  display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
+}
+//#########################################################################################
+void DisplayAstronomySection(int x, int y) {
+  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+  drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNRISE, LEFT);
+  drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNSET, LEFT);
+  time_t now = time(NULL);
+  struct tm * now_utc = gmtime(&now);
+  const int day_utc   = now_utc->tm_mday;
+  const int month_utc = now_utc->tm_mon + 1;
+  const int year_utc  = now_utc->tm_year + 1900;
+  drawString(x, y + 33, MoonPhase(day_utc, month_utc, year_utc, Hemisphere), LEFT);
+  DrawMoon(x+60, y-15, day_utc, month_utc, year_utc, Hemisphere);
+}
+//#########################################################################################
+void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
+  //Serial.println("Icon name: " + IconName);
+  if      (IconName == "01d" || IconName == "01n")  Sunny(x, y, IconSize, IconName);        //Serial.println("Sunny");}
+  else if (IconName == "02d" || IconName == "02n")  MostlySunny(x, y, IconSize, IconName);   //Serial.println("MostlySunny");}
+  else if (IconName == "03d" || IconName == "03n")  MostlyCloudy(x, y, IconSize, IconName);  //Serial.println("MostlyCloudy");}
+  else if (IconName == "04d" || IconName == "04n")  Cloudy(x, y, IconSize, IconName);        //Serial.println("Cloudy");}
+  else if (IconName == "09d" || IconName == "09n")  ChanceRain(x, y, IconSize, IconName);    //Serial.println("ChanceRain");}
+  else if (IconName == "10d" || IconName == "10n")  Rain(x, y, IconSize, IconName);          //Serial.println("Rain");}
+  else if (IconName == "11d" || IconName == "11n")  Tstorms(x, y, IconSize, IconName);       //Serial.println("Tstorms");}  
+  else if (IconName == "13d" || IconName == "13n")  Snow(x, y, IconSize, IconName);          //Serial.println("Snow");} 
+  else if (IconName == "50d" || IconName == "50n")  Fog(x, y, IconSize, IconName);           //Serial.println("Fog");}
+  else                                              Nodata(x, y, IconSize, IconName);        //Serial.println("Nodata");}
+}
+//#########################################################################################
 //#########################################################################################
 void get_weather_data(String type){
   byte get_weather_cnt = 0;
@@ -222,31 +343,6 @@ void get_weather_data(String type){
   }
   StopWiFi();
   Serial.println("Weather data received");
-}
-// ##########################################################################################
-void connect2wifi(){
-  byte reconnect_cnt = 0;
-  //uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
-  uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
-  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
-    Serial.println("waiting for WiFi connection...");   
-    if(reconnect_cnt > 1) {
-      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("WiFi connection failed... "), LEFT);
-      drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
-      display.display(false);
-      Serial.println("WiFi connection failed...");
-      buttonWake_cnt = -1;
-      delay(500);
-      BeginSleep(SleepDuration);
-    }  
-    reconnect_cnt++;
-    delay(500);
-  }
-  Serial.println("WiFi connected");
 }
 // ##########################################################################################
 void isSetupMode(){
@@ -349,184 +445,31 @@ float voltage = analogRead(35) / 4096.0 * 7.46;
     }
   }
 }
-//#########################################################################################
-void Show4DayForecast() {
-  Draw_Heading_Section();
-  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-  drawString(3, 33, "4-day forecast:", LEFT);
-
-  int forecastStart = 0, Dposition = 0;
-  for (int i = 2; i < MaxReadings; i++) {
-    if ((WxForecast[i].Period.substring(11, 13) == "07") || 
-    (WxForecast[i].Period.substring(11, 13) == "08") ||
-    (WxForecast[i].Period.substring(11, 13) == "09"))  { //find the start of the next day
-      forecastStart = i; 
-      break;
-    }
+// ##########################################################################################
+void connect2wifi(){
+  byte reconnect_cnt = 0;
+  //uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
+  uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
+  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
+    Serial.println("waiting for WiFi connection...");   
+    if(reconnect_cnt > 1) {
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("WiFi connection failed... "), LEFT);
+      drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      display.display(false);
+      Serial.println("WiFi connection failed...");
+      buttonWake_cnt = -1;
+      delay(500);
+      BeginSleep(SleepDuration);
+    }  
+    reconnect_cnt++;
+    delay(500);
   }
-  //get HIGH and LOW for each day
-  int maxPos = 0, minPos = 0;
-  for (int Day = 0; Day < 4; Day++) { //show 4 days
-    HLReadings[Day].High  = WxForecast[forecastStart + (8 * Day)].High; //init
-    HLReadings[Day].Low  = WxForecast[forecastStart + (8 * Day)].Low; //init
-    for (int r = forecastStart + (8 * Day); r < forecastStart + (8 * (Day + 1)); r++) { // 00:00 to 21:00 is 8 readings
-      if (WxForecast[r].High >= HLReadings[Day].High) {
-        HLReadings[Day].High = WxForecast[r].High;
-        maxPos = r;
-      }
-      if (WxForecast[r].Low <= HLReadings[Day].Low)  {
-        HLReadings[Day].Low = WxForecast[r].Low;
-        minPos = r; //not used
-      }
-    }
-    DisplayForecastWeather(28, 85, maxPos, Day, 57); // x,y coordinates, forecast number, position, spacing width
-    Serial.println("Day " + String(Day) + ": Max = " + String(HLReadings[Day].High) + " Min = " + String(HLReadings[Day].Low));
-  }
+  Serial.println("WiFi connected");
 }
-//#########################################################################################
-void ShowNextDayForecast() {
-  Draw_Heading_Section(); 
-  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-  drawString(3, 36, "weather tomorrow:", LEFT);
-  for (int i = 3; i < MaxReadings - 4; i++) { 
-    //find the start of the next day
-    if ((WxForecast[i].Period.substring(11, 13) == "07") || 
-    (WxForecast[i].Period.substring(11, 13) == "08") ||
-    (WxForecast[i].Period.substring(11, 13) == "09"))  { 
-      Serial.println("Forecast for " + String(WxForecast[i].Period) + ", " + String(WxForecast[i].Temperature) + "C ," + "pos = " + i);
-      Draw_Next_Day_3hr_Forecast(-4, 96, i);    // First  3hr forecast box
-      Draw_Next_Day_3hr_Forecast(38, 96, i + 1);    // Second 3hr forecast box
-      Draw_Next_Day_3hr_Forecast(83, 96, i + 2);   // Third  3hr forecast box
-      Draw_Next_Day_3hr_Forecast(127, 96, i + 3);   // Fourth  3hr forecast box
-      Draw_Next_Day_3hr_Forecast(170, 96, i + 4);   // Fifth 3hr forecast box 
-      DrawSmallWind(231, 75, WxForecast[i + 1].Winddir, WxForecast[i + 1].Windspeed);
-      return;
-    }
-  }
-}
-//######################################################################################### 
-void DisplayForecastWeather(int x, int y, int forecast, int Dposition, int fwidth) {
-  String ForecastDay = GetForecastDay(WxForecast[forecast].Dt);
-  x += fwidth * Dposition;
-  DisplayWXicon(x + 10, y + 5, WxForecast[forecast].Icon, SmallIcon); 
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 8, y - 22, ForecastDay, CENTER);
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 16, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
-  display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
-}
-//#########################################################################################
-
-
-//#########################################################################################
-void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
-  //Serial.println("Icon name: " + IconName);
-  if      (IconName == "01d" || IconName == "01n")  Sunny(x, y, IconSize, IconName);        //Serial.println("Sunny");}
-  else if (IconName == "02d" || IconName == "02n")  MostlySunny(x, y, IconSize, IconName);   //Serial.println("MostlySunny");}
-  else if (IconName == "03d" || IconName == "03n")  MostlyCloudy(x, y, IconSize, IconName);  //Serial.println("MostlyCloudy");}
-  else if (IconName == "04d" || IconName == "04n")  Cloudy(x, y, IconSize, IconName);        //Serial.println("Cloudy");}
-  else if (IconName == "09d" || IconName == "09n")  ChanceRain(x, y, IconSize, IconName);    //Serial.println("ChanceRain");}
-  else if (IconName == "10d" || IconName == "10n")  Rain(x, y, IconSize, IconName);          //Serial.println("Rain");}
-  else if (IconName == "11d" || IconName == "11n")  Tstorms(x, y, IconSize, IconName);       //Serial.println("Tstorms");}  
-  else if (IconName == "13d" || IconName == "13n")  Snow(x, y, IconSize, IconName);          //Serial.println("Snow");} 
-  else if (IconName == "50d" || IconName == "50n")  Fog(x, y, IconSize, IconName);           //Serial.println("Fog");}
-  else                                              Nodata(x, y, IconSize, IconName);        //Serial.println("Nodata");}
-}
-//#########################################################################################
-
-void BeginSleep(long _sleepDuration) {
-  display.powerOff();
-  StopWiFi();
-  // Enable wakeup by timer and by button (ext0)
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
-  long SleepTimer = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((SleepTimer+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
-#ifdef BUILTIN_LED
-  pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
-  digitalWrite(BUILTIN_LED, HIGH);
-#endif
-  Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep");
-  delay(1000);
-  esp_deep_sleep_start();  // Sleep for e.g. 30 minutes
-}
-//#########################################################################################
-void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable resolution
-  //Draw_Grid();
-  Draw_Heading_Section();           // Top line of the display
-  Draw_Main_Weather_Section();      // Centre section of display for Location, temperature, Weather report, Wx Symbol and wind direction
-  //Index from 0, gets us more 'near' data.
-  Draw_3hr_Forecast(-3, 96, 0);    // First  3hr forecast box
-  Draw_3hr_Forecast(42, 96, 1);    // Second 3hr forecast box
-  Draw_3hr_Forecast(86, 96, 2);   // Third  3hr forecast box
-  Draw_3hr_Forecast(132, 96, 3);   // Fourth  3hr forecast box
-  Draw_3hr_Forecast(174, 96, 4);   // Fifth 3hr forecast box
-  DisplayAstronomySection(142, 18); // Astronomy section Sun rise/set and Moon phase plus icon
-  // Not really enough space for these
-  //if (WxConditions[0].Visibility > 0) Visibility(110, 40, String(WxConditions[0].Visibility) + "M");
-  //if (WxConditions[0].Cloudcover > 0) CloudCover(110, 55, WxConditions[0].Cloudcover);
-}
-//#########################################################################################
-void Draw_Heading_Section() {
-  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(0, 1, Location_name, LEFT);
-  drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
-  DrawBattery(80, 12);
-  display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
-}
-//#########################################################################################
-void Draw_Main_Weather_Section() {
-  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon); //WxConditions[0].Icon
-  u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-  drawString(0, 35, String(WxConditions[0].Temperature, 1) + "°", LEFT);
-  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(45, 35, "/ " + String(WxConditions[0].Humidity, 0) + "%", LEFT);
-  
-  u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-  String Wx_Description = WxConditions[0].Forecast0;
-  if (WxConditions[0].Forecast1 != "") Wx_Description += " & " +  WxConditions[0].Forecast1;
-  if (WxConditions[0].Forecast2 != "" && WxConditions[0].Forecast1 != WxConditions[0].Forecast2) Wx_Description += " & " +  WxConditions[0].Forecast2;
-  //drawString(2, 62, TitleCase(Wx_Description), LEFT);
-  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK); //Draw width of the 5 weather forcasts
-  //Squeeze in a small wind indication in the space we cannot quite squeeze a 3h prediction into
-  DrawSmallWind(231, 75, WxConditions[0].Winddir, WxConditions[0].Windspeed);
-  //Pressure just getting in the way and very small right now.
-  DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
-}
-//#########################################################################################
-void Draw_3hr_Forecast(int x, int y, int index) {
-  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
-  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x + 7, y - 21, WxForecast[index].Period.substring(11, 16), LEFT);
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 13, y + 18, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
-  display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52 , GxEPD_BLACK);
-  display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52 , GxEPD_BLACK);
-}
-//#########################################################################################
-void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
-  DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 4, y - 28, WxForecast[index].Period.substring(11, 16), LEFT);
-  drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
-  display.drawLine(x + 44, y - 30, x + 44, y - 30 + 57 , GxEPD_BLACK);
-  display.drawLine(x, y - 30 + 57, x + 44, y - 30 + 57 , GxEPD_BLACK);
-}
-
-//#########################################################################################
-void DisplayAstronomySection(int x, int y) {
-  u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNRISE, LEFT);
-  drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNSET, LEFT);
-  time_t now = time(NULL);
-  struct tm * now_utc = gmtime(&now);
-  const int day_utc   = now_utc->tm_mday;
-  const int month_utc = now_utc->tm_mon + 1;
-  const int year_utc  = now_utc->tm_year + 1900;
-  drawString(x, y + 33, MoonPhase(day_utc, month_utc, year_utc, Hemisphere), LEFT);
-  DrawMoon(x+60, y-15, day_utc, month_utc, year_utc, Hemisphere);
-}
-
 //#########################################################################################
 uint8_t StartWiFi(uint8_t mac[6]) {
   Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
@@ -580,6 +523,23 @@ void StopWiFi() {
   WiFi.mode(WIFI_OFF);
 }
 //#########################################################################################
+void BeginSleep(long _sleepDuration) {
+  display.powerOff();
+  StopWiFi();
+  // Enable wakeup by timer and by button (ext0)
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
+  long SleepTimer = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
+  esp_sleep_enable_timer_wakeup((SleepTimer+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
+#ifdef BUILTIN_LED
+  pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
+  digitalWrite(BUILTIN_LED, HIGH);
+#endif
+  Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
+  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep");
+  delay(1000);
+  esp_deep_sleep_start();  // Sleep for e.g. 30 minutes
+}
+//#########################################################################################
 void InitialiseDisplay() {
   //display.init(115200, true, 0, false);
   display.init(0); //for older Waveshare HAT's
@@ -595,11 +555,11 @@ void InitialiseDisplay() {
   display.fillScreen(GxEPD_WHITE);
   display.setFullWindow();
 }
-
+//#########################################################################################
 void DisplayInitTask(void *pv) {
 
   InitialiseDisplay();
-
+  Serial.println("display init finished");
   displayReady = true;           // signal “done”
   vTaskDelete(NULL);             // kill this task
 }
