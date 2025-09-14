@@ -36,7 +36,6 @@ void Draw_Grid();
 
 // ---- Battery ----
 void DrawBattery(int x, int y);
-bool BatteryAbovePercentage(byte check_percentage);
 
 // ---- Primitive icon parts ----
 void addcloud(int x, int y, int scale, int linesize);

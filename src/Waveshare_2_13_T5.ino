@@ -34,6 +34,11 @@
 // + customized for Lilygo TTGO T5 V2.3_2.13 e-paper display
 
 
+//TO DO
+// - implemnt get weather as function
+// - implemnt popup check as function
+
+
 #include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
 #include <WiFi.h>            // Built-in
 #include "esp_wifi.h"
@@ -46,7 +51,7 @@
 #include "wifi_setup.h"
 #include "common.h"
  
-//#define DRAW_GRID 1   //Help debug layout changes
+// ################ DISPLAY #############################################################
 #define SCREEN_WIDTH   250
 #define SCREEN_HEIGHT  122
 
@@ -65,8 +70,11 @@ GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;  // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
 
-//################ VARIABLES ###########################
-String  time_str, date_str, date_dd_mm_str, ForecastDay; // strings to hold time and date
+TaskHandle_t dispInitTaskHandle = nullptr;
+volatile bool displayReady = false;
+
+//################ VARIABLES #############################################################
+String  time_str, date_str, date_dd_mm_str; // strings to hold time and date
 int     wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
 long    StartTime = 0;
 
@@ -78,14 +86,12 @@ float temperature_readings[max_readings] = {0};
 float humidity_readings[max_readings]    = {0};
 float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
-
 Forecast_record_type  WxConditions[1];
 Forecast_record_type  WxForecast[max_readings];
 
-
 //this is here the initial value, it will be updated from the EEPROM  after setting a value in the web interface
 // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
-int SleepDurationPreset = 60; 
+int SleepDurationPreset = 60; // will be overwritten in load_config()
 int SleepDuration;
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
 int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
@@ -99,15 +105,13 @@ typedef struct { // For current Day and Day 1, 2, 3, etc
 HL_record_type  HLReadings[max_readings];
 
 //##################################################################################
-// Add these defines for button and LED pins
 #define BUTTON_PIN 39
-//#define LED_PIN    19 //this was conflicting with the display functionality, so it cannot be used
+//#define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR bool first_boot = true;
 RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
 void IRAM_ATTR handleButtonInterrupt() {
-  // Button wake
 }
 
 //#########################################################################################
@@ -129,52 +133,101 @@ void setup() {
       buttonWake_cnt = 0;
       break;
   }
-
+  
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
 
   // Load WiFi credentials from EEPROM or defaults
-  load_wifi_config();
+  load_config();
   SleepDuration = SleepDurationPreset;
 
-  // Check for setup mode (button held at power-on)
-  if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) { // Power on reset
-    Serial.println("entering setup mode...");
-    InitialiseDisplay();
-    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-    drawString(10, 30, String("Setup mode"), LEFT);
-    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
-    drawString(10, 80, String("open settings page:"), LEFT);
-    drawString(10, 100, String("http://192.168.4.1/"), LEFT);
-    display.display(false);
-    run_wifi_setup_portal();
-    // Will restart after setup
-    while (true) delay(1000);
-  }
+  xTaskCreatePinnedToCore(
+      DisplayInitTask, "DispInit",
+      4096,            // stack size; bump to 6144/8192 if needed
+      NULL,
+      2,               // priority (lower than your time-critical tasks)
+      &dispInitTaskHandle,
+      1                // core 1
+  );
 
-  InitialiseDisplay();
-
-  if (BatteryAbovePercentage(10)  == false) {
-    Serial.println("Battery too low, stopping");
-    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-    drawString(10, 30, String("Critical battery level..."),  LEFT);
-    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    drawString(10, 70, String("please recharge and reboot!"), LEFT);
-    display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
-    display.fillRect(90 + 34, 60 - 10, 2, 5, GxEPD_BLACK);
-    display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
+  CheckBattAbovePercentage(10);
+  isSetupMode();
+  connect2wifi();
+  getTime();
+  check4popups();
+ 
+  //update display on wakeup
+  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
+  || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
+    first_boot = false;
+    buttonWake_cnt = 0;
+    Serial.println("Showing today's Weather");
+    get_weather_data("current");
+    DisplayWeather();
     display.display(false);
     display.powerOff();
-    buttonWake_cnt = -1;
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
-    delay(500);
-    esp_deep_sleep_start();
+  }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
+    Serial.println("Showing next day's forecast");
+    get_weather_data("forecast");
+    ShowNextDayForecast();
+    display.display(false);
+    SleepDuration = 5; //after 5 minutes go back to current day display
+    display.powerOff();
+  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
+    buttonWake_cnt = 2;
+    Serial.println("Showing 4 day forecast");
+    get_weather_data("forecast");
+    Show4DayForecast();
+    display.display(false);
+    SleepDuration = 5; //after 5 minutes go back to current day display
+    display.powerOff();
   }
+  delay(500);
+  BeginSleep(SleepDuration);
+}
 
+//#########################################################################################
+void loop() {
+  // Nothing to do here, all work is done in setup()
+  // The program will go into deep sleep after setup() is completed
+  // and will wake up based on the button press or timer.
+}
+//#########################################################################################
+void get_weather_data(String type){
+  byte get_weather_cnt = 0;
+  bool receivedOk = false;
+  WiFiClient client;
+  while (receivedOk == false) {
+    if (receivedOk  == false && type == "current"){
+      receivedOk  = obtain_wx_data(client, "weather") && obtain_wx_data(client, "forecast");
+    } 
+    if (receivedOk == false && type == "forecast") receivedOk = obtain_wx_data(client, "forecast");
+    Serial.println("waiting for weather data...");   
+    if(get_weather_cnt > 3 && (!receivedOk)) {
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("Failed to get weather data..."), LEFT);
+      drawString(10, 40, String("'") + weatherServer + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 90, String("Update Settings:"),  LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      display.display(false);
+      StopWiFi();
+      buttonWake_cnt = -1;
+      Serial.println("Failed to get weather data...");
+      delay(5000);
+      BeginSleep(SleepDuration);
+    }
+    get_weather_cnt++;
+    delay(500);
+  }
+  StopWiFi();
+  Serial.println("Weather data received");
+}
+// ##########################################################################################
+void connect2wifi(){
   byte reconnect_cnt = 0;
-  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
-  bool RxWeather = false, RxForecast = false;
+  //uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
+  uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
   while (StartWiFi(desiredMac) != WL_CONNECTED) { 
     Serial.println("waiting for WiFi connection...");   
     if(reconnect_cnt > 1) {
@@ -194,7 +247,27 @@ void setup() {
     delay(500);
   }
   Serial.println("WiFi connected");
-
+}
+// ##########################################################################################
+void isSetupMode(){
+  // Check for setup mode (button held at power-on)
+  if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) { // Power on reset
+    Serial.println("entering setup mode...");
+    //InitialiseDisplay();
+    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+    drawString(10, 30, String("Setup mode"), LEFT);
+    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+    drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
+    drawString(10, 80, String("open settings page:"), LEFT);
+    drawString(10, 100, String("http://192.168.4.1/"), LEFT);
+    display.display(false);
+    run_wifi_setup_portal();
+    // Will restart after setup
+    while (true) delay(1000);
+  }
+}
+// ##########################################################################################
+void getTime(){
   byte get_time_cnt = 0;
   while (SetupTime() != true) { 
     Serial.println("waiting for timeserver...");   
@@ -214,41 +287,16 @@ void setup() {
     get_time_cnt++;
     delay(500);
   }
- 
-  byte get_weather_cnt = 0;
-  WiFiClient client;
-  while ((RxWeather == false || RxForecast == false)) {
-    if (RxWeather  == false) RxWeather  = obtain_wx_data(client, "weather");
-    if (RxForecast == false) RxForecast = obtain_wx_data(client, "forecast");
-    Serial.println("waiting for weather data...");   
-    if(get_weather_cnt > 3 && (!RxWeather || !RxForecast)) {
-      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("Failed to get weather data..."), LEFT);
-      drawString(10, 40, String("'") + weatherServer + String("'"),  LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update Settings:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
-      display.display(false);
-      StopWiFi();
-      buttonWake_cnt = -1;
-      Serial.println("Failed to get weather data...");
-      delay(5000);
-      BeginSleep(SleepDuration);
-    }
-    get_weather_cnt++;
-    delay(500);
-  }
-  StopWiFi();
-  Serial.println("Weather data received");
-
-  //check for up to 4 popup meassages
+}
+//#########################################################################################
+void check4popups(){
   const int popup_msg_addrs[4] = {POPUP1_MSG_ADDR, POPUP2_MSG_ADDR, POPUP3_MSG_ADDR, POPUP4_MSG_ADDR};
   const int popup_date_addrs[4] = {POPUP1_DATE_ADDR, POPUP2_DATE_ADDR, POPUP3_DATE_ADDR, POPUP4_DATE_ADDR};
   uint8_t popup_found = 255;
   for (int i = 0; i < 4; i++) {
     String popup_msg = eeprom_read_string(popup_msg_addrs[i], 48);
     String popup_date = eeprom_read_string(popup_date_addrs[i], 8);
-    Serial.println("popup check: " + popup_msg + " - " + popup_date);
+    //Serial.println("popup check: " + popup_msg + " - " + popup_date);
     if (popup_date== String(date_dd_mm_str) && popup_msg.length() > 0) {
       popup_found = i;
       if(popup_displayed != popup_found){
@@ -272,42 +320,35 @@ void setup() {
     popup_displayed = 255;
     Serial.println("No popup msg today");
   }
-  
-  //update display on wakeup
-  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
-  || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
-    first_boot = false;
-    buttonWake_cnt = 0;
-    Serial.println("Show today's Weather");
-    DisplayWeather();
-    display.display(false);
-    SleepDuration = SleepDurationPreset;
-    display.powerOff();
-  }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
-    Serial.println("Show next day's forecast");
-    ShowNextDayForecast();
-    display.display(false);
-    SleepDuration = 5; //after 5 minutes go back to current day display
-    display.powerOff();
-  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
-    buttonWake_cnt = 2;
-    Serial.println("Show 4 day forecast");
-    Show4DayForecast();
-    display.display(false);
-    SleepDuration = 5; //after 5 minutes go back to current day display
-    display.powerOff();
-  }
-  delay(500);
-  BeginSleep(SleepDuration);
 }
-
 //#########################################################################################
-void loop() {
-  // Nothing to do here, all work is done in setup()
-  // The program will go into deep sleep after setup() is completed
-  // and will wake up based on the button press or timer.
+void CheckBattAbovePercentage(byte check_percentage){
+uint8_t percentage = 100;
+float voltage = analogRead(35) / 4096.0 * 7.46;
+  if (voltage > 1 ) { // Only display if there is a valid reading
+    percentage = 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
+    if (voltage >= 4.20) percentage = 100;
+    if (voltage <= 3.50) percentage = 0;
+    Serial.println("Voltage = " + String(voltage));
+    if (percentage <= check_percentage) {
+      Serial.println("critical battery level, please charge!");
+      Serial.println("Battery too low, stopping");
+      u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+      drawString(10, 30, String("Critical battery level..."),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+      drawString(10, 70, String("please recharge and reboot!"), LEFT);
+      display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
+      display.fillRect(90 + 34, 60 - 10, 2, 5, GxEPD_BLACK);
+      display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
+      display.display(false);
+      display.powerOff();
+      buttonWake_cnt = -1;
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+      delay(500);
+      esp_deep_sleep_start();
+    }
+  }
 }
-
 //#########################################################################################
 void Show4DayForecast() {
   Draw_Heading_Section();
@@ -365,7 +406,7 @@ void ShowNextDayForecast() {
 }
 //######################################################################################### 
 void DisplayForecastWeather(int x, int y, int forecast, int Dposition, int fwidth) {
-  GetForecastDay(WxForecast[forecast].Dt);
+  String ForecastDay = GetForecastDay(WxForecast[forecast].Dt);
   x += fwidth * Dposition;
   DisplayWXicon(x + 10, y + 5, WxForecast[forecast].Icon, SmallIcon); 
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -375,22 +416,7 @@ void DisplayForecastWeather(int x, int y, int forecast, int Dposition, int fwidt
   display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
 }
 //#########################################################################################
-String GetForecastDay(int unix_time) {
-  // Returns either '21:12  ' or ' 09:12pm' depending on Units mode
-  time_t tm = unix_time;
-  struct tm *now_tm = localtime(&tm);
-  char output[40], FDay[40];
-  if (Units == "M") {
-    strftime(output, sizeof(output), "%H:%M %d/%m/%y", now_tm);
-    strftime(FDay, sizeof(FDay), "%w", now_tm);
-  }
-  else {
-    strftime(output, sizeof(output), "%I:%M%p %m/%d/%y", now_tm);
-    strftime(FDay, sizeof(FDay), "%w", now_tm);
-  }
-  ForecastDay = weekday_D[String(FDay).toInt()];
-  return output;
-}
+
 
 //#########################################################################################
 void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
@@ -426,10 +452,7 @@ void BeginSleep(long _sleepDuration) {
 }
 //#########################################################################################
 void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable resolution
-#if DRAW_GRID
-  Draw_Grid();
-#endif
-  UpdateLocalTime();
+  //Draw_Grid();
   Draw_Heading_Section();           // Top line of the display
   Draw_Main_Weather_Section();      // Centre section of display for Location, temperature, Weather report, Wx Symbol and wind direction
   //Index from 0, gets us more 'near' data.
@@ -446,10 +469,8 @@ void DisplayWeather() {             // 2.13" e-paper display is 250x122 useable 
 //#########################################################################################
 void Draw_Heading_Section() {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  //display.drawRect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,GxEPD_BLACK);
   drawString(0, 1, Location_name, LEFT);
-  //drawString(0, 1, time_str, LEFT);
-  drawString(SCREEN_WIDTH, 1, date_str, RIGHT);
+  drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
   DrawBattery(80, 12);
   display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
 }
@@ -522,18 +543,15 @@ uint8_t StartWiFi(uint8_t mac[6]) {
                   mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
     }
   }
-  
   esp_err_t err = esp_wifi_start();
   if (err != ESP_OK) {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
-
   //Verify MAC
   // uint8_t cur[6]; 
   // esp_wifi_get_mac(WIFI_IF_STA, cur);
   // Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
   //               cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
-
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   unsigned long start = millis();
@@ -562,15 +580,6 @@ void StopWiFi() {
   WiFi.mode(WIFI_OFF);
 }
 //#########################################################################################
-boolean SetupTime() {
-  configTime(gmtOffset_h * 3600, daylightOffset_h * 3600, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
-  setenv("TZ", Timezone, 1);  //setenv()adds the "TZ" variable to the environment with a value TimeZone, only used if set to 1, 0 means no change
-  tzset(); // Set the TZ environment variable
-  delay(100);
-  bool TimeStatus = UpdateLocalTime();
-  return TimeStatus;
-}
-//#########################################################################################
 void InitialiseDisplay() {
   //display.init(115200, true, 0, false);
   display.init(0); //for older Waveshare HAT's
@@ -585,4 +594,12 @@ void InitialiseDisplay() {
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
   display.fillScreen(GxEPD_WHITE);
   display.setFullWindow();
+}
+
+void DisplayInitTask(void *pv) {
+
+  InitialiseDisplay();
+
+  displayReady = true;           // signal “done”
+  vTaskDelete(NULL);             // kill this task
 }

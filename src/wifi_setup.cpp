@@ -28,7 +28,7 @@ String eeprom_read_string(int addr, int maxlen) {
 }
 
 // Load config from EEPROM or owm_credentials.h
-void load_wifi_config() {
+void load_config() {
   EEPROM.begin(EEPROM_SIZE);
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized) {

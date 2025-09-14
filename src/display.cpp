@@ -102,22 +102,7 @@ void DrawBattery(int x, int y) {
     //drawString(x + 13, y + 5,  String(voltage, 2) + "v", CENTER);
   }
 }
-//#########################################################################################
-bool BatteryAbovePercentage(byte check_percentage){
-uint8_t percentage = 100;
-float voltage = analogRead(35) / 4096.0 * 7.46;
-  if (voltage > 1 ) { // Only display if there is a valid reading
-    percentage = 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
-    if (voltage >= 4.20) percentage = 100;
-    if (voltage <= 3.50) percentage = 0;
-    Serial.println("Voltage = " + String(voltage));
-    if (percentage <= check_percentage) {
-      Serial.println("critical battery level, please charge!");
-      return false;
-    }
-  }
-return true;
-}
+
 //#########################################################################################
 // Symbols are drawn on a relative 10x10grid and 1 scale unit = 1 drawing unit
 void addcloud(int x, int y, int scale, int linesize) {

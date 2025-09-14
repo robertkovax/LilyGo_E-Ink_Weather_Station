@@ -74,8 +74,6 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
       char buffer[20];
       strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm_info);
       WxForecast[r].Period = String(buffer);
-
-      //Serial.println("forecast period " + WxForecast[r].Period);
     }
 
     float pressure_trend = WxForecast[2].Pressure - WxForecast[0].Pressure; // slope between now and later
@@ -91,6 +89,15 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
   return true;
 }
 //#########################################################################################
+boolean SetupTime() {
+  configTime(gmtOffset_h * 3600, daylightOffset_h * 3600, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
+  setenv("TZ", Timezone, 1);  //setenv()adds the "TZ" variable to the environment with a value TimeZone, only used if set to 1, 0 means no change
+  tzset(); // Set the TZ environment variable
+  delay(100);
+  bool TimeStatus = UpdateLocalTime();
+  return TimeStatus;
+}
+//#########################################################################################
 //convert Unicx time to UTC time
 String ConvertUnixTime(int unix_time) {
   time_t tm = unix_time;
@@ -102,6 +109,22 @@ String ConvertUnixTime(int unix_time) {
     strftime(output, sizeof(output), "%I:%M%P %m/%d/%y", now_tm);
   }
   return String(output);
+}
+// #######################################################################################
+String GetForecastDay(int unix_time) {
+  // Returns either '21:12  ' or ' 09:12pm' depending on Units mode
+  time_t tm = unix_time;
+  struct tm *now_tm = localtime(&tm);
+  char output[40], FDay[40];
+  if (Units == "M") {
+    strftime(output, sizeof(output), "%H:%M %d/%m/%y", now_tm);
+    strftime(FDay, sizeof(FDay), "%w", now_tm);
+  }
+  else {
+    strftime(output, sizeof(output), "%I:%M%p %m/%d/%y", now_tm);
+    strftime(FDay, sizeof(FDay), "%w", now_tm);
+  }
+  return weekday_D[String(FDay).toInt()];
 }
 //#########################################################################################
 boolean UpdateLocalTime() {
@@ -148,12 +171,11 @@ bool obtain_wx_data(WiFiClient& client, const String& requestType) {
   String uri = "/data/2.5/" + requestType + "?lat=" + LAT + "&lon=" + LON +
                "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
 
-  // Serial.print(weatherServer);
-  // Serial.println(uri.c_str());
-
   if (requestType != "weather") {
     uri += "&cnt=" + String(MaxReadings);
   }
+  // Serial.print(weatherServer);
+  // Serial.println(uri.c_str());
 
   http.begin(client, weatherServer, 80, uri);
 
@@ -171,7 +193,6 @@ bool obtain_wx_data(WiFiClient& client, const String& requestType) {
     return false;
   }
 }
-
 //#########################################################################################
 float mm_to_inches(float value_mm)
 {

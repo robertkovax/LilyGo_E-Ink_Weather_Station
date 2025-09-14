@@ -37,7 +37,7 @@ extern int SleepDurationPreset;
 void run_wifi_setup_portal();
 
 // Loads credentials and config from EEPROM or owm_credentials.h
-void load_wifi_config();
+void load_config();
 
 String eeprom_read_string(int addr, int maxlen);
 
