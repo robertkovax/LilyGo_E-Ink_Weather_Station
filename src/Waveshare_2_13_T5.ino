@@ -48,7 +48,7 @@
 //#include "forecast_record.h"
 //#include "owm_credentials.h"
 #include "display.h"
-#include "wifi_setup.h"
+#include "setup_server.h"
 #include "common.h"
  
 // ################ DISPLAY #############################################################
@@ -142,10 +142,10 @@ void setup() {
   getTime();
   check4popups();
  
-  //update display on wakeup
+  //update display on wakeup logic
   Serial.print("Wakeup cause: ");
   switch(esp_sleep_get_wakeup_cause()){
-    case 0: // show first screen always
+    case 0: // show first screen
       Serial.println("Power on / reset");
       buttonWake_cnt = 0;
       break;
@@ -153,7 +153,7 @@ void setup() {
       Serial.println("External interrupt (button press)");
       buttonWake_cnt++;
       break;
-    case 4: // show first screen always
+    case 4: // show first screen
       Serial.println("Timer wakeup");
       buttonWake_cnt = 0; 
       break;
@@ -163,23 +163,27 @@ void setup() {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
     get_weather_data("current");
+    get_weather_data("forecast");
+    StopWiFi();
     DisplayTodaysWeather();
     display.display(false);
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
+    StopWiFi();
     ShowNextDayForecast();
     display.display(false);
-    SleepDuration = 5; //after 5 minutes go back to current day display
+    SleepDuration = 5;
     display.powerOff();
-  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  {
+  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  { 
     buttonWake_cnt = 2;
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
+    StopWiFi();
     Show4DayForecast();
     display.display(false);
-    SleepDuration = 5; //after 5 minutes go back to current day display
+    SleepDuration = 5;
     display.powerOff();
   }
   delay(500);
@@ -252,7 +256,7 @@ void Draw_Heading_Section() {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(0, 1, Location_name, LEFT);
   //drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
-  drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str + " " + time_str, RIGHT);
+  drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str, RIGHT); //+ " " + time_str
   DrawBattery(80, 12);
   display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
 }
@@ -262,7 +266,7 @@ void Draw_3hr_Forecast(int x, int y, int index) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x + 7, y - 21, WxForecast[index].Period.substring(11, 16), LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  drawString(x + 13, y + 18, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
+  drawString(x + 13, y + 18, String(WxForecast[index].Temperature, 0) + "°", LEFT);
   display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52 , GxEPD_BLACK);
   display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52 , GxEPD_BLACK);
 }
@@ -271,7 +275,7 @@ void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
   DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 4, y - 25, WxForecast[index].Period.substring(11, 16), LEFT);
-  drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT); //+ "°/" + String(WxForecast[index].Low, 0)
+  drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT);
   display.drawLine(x + 44, y - 32, x + 44, y - 32 + 57 , GxEPD_BLACK);
 }
 //######################################################################################### 
@@ -317,12 +321,16 @@ void get_weather_data(String type){
   byte get_weather_cnt = 0;
   bool receivedOk = false;
   WiFiClient client;
+  
   while (receivedOk == false) {
     if (receivedOk  == false && type == "current"){
-      receivedOk  = obtain_wx_data(client, "weather") && obtain_wx_data(client, "forecast");
+      Serial.println("waiting for current weather data..."); 
+      receivedOk  = obtain_wx_data(client, "weather");
     } 
-    if (receivedOk == false && type == "forecast") receivedOk = obtain_wx_data(client, "forecast");
-    Serial.println("waiting for weather data...");   
+    if (receivedOk == false && type == "forecast") {
+      Serial.println("waiting for forecast data..."); 
+      receivedOk = obtain_wx_data(client, "forecast");
+    }  
     if(get_weather_cnt > 3 && (!receivedOk)) {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("Failed to get weather data..."), LEFT);
@@ -340,7 +348,6 @@ void get_weather_data(String type){
     get_weather_cnt++;
     delay(500);
   }
-  StopWiFi();
   Serial.println("Weather data received");
 }
 // ##########################################################################################
@@ -348,7 +355,7 @@ void isSetupMode(){
   // Check for setup mode (button held at power-on)
   if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) { // Power on reset
     Serial.println("entering setup mode...");
-    //InitialiseDisplay();
+    while(!displayReady);
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
     drawString(10, 30, String("Setup mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -397,7 +404,7 @@ void check4popups(){
       if(popup_displayed != popup_found){
         Serial.println("Today's popup: " + popup_msg);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-       //drawString(10, 20, String(popup_msg), LEFT);
+        while(!displayReady);
         drawStringMaxWidth(10, 20, 170, popup_msg, LEFT);
         Sunny(220, 35, Large, "01");         
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -428,6 +435,7 @@ float voltage = analogRead(35) / 4096.0 * 7.46;
     if (percentage <= check_percentage) {
       Serial.println("critical battery level, please charge!");
       Serial.println("Battery too low, stopping");
+      while(!displayReady);
       u8g2Fonts.setFont(u8g2_font_helvB14_tf);
       drawString(10, 30, String("Critical battery level..."),  LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -447,8 +455,8 @@ float voltage = analogRead(35) / 4096.0 * 7.46;
 // ##########################################################################################
 void connect2wifi(){
   byte reconnect_cnt = 0;
-  //uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
-  uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
+  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
+  //uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
   while (StartWiFi(desiredMac) != WL_CONNECTED) { 
     Serial.println("waiting for WiFi connection...");   
     if(reconnect_cnt > 1) {
@@ -465,7 +473,7 @@ void connect2wifi(){
       BeginSleep(SleepDuration);
     }  
     reconnect_cnt++;
-    delay(500);
+    delay(1000);
   }
   Serial.println("WiFi connected");
 }

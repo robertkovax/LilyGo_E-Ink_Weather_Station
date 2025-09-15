@@ -4,6 +4,20 @@
 #include <Arduino.h>
 
 extern int SleepDurationPreset;
+extern char weatherServer[];
+
+extern char ssid[64];
+extern char password[64];
+extern char apikey[64];
+extern char LAT[32];
+extern char LON[32];
+extern char Location_name[32];
+extern char Hemisphere[32];
+extern char Units[8];
+extern char Timezone[32];
+extern char ntpServer[32];
+extern int gmtOffset_hour;
+extern int daylightOffset_hour;
 
 #define EEPROM_SIZE 1024
 #define SSID_ADDR   0
@@ -12,7 +26,6 @@ extern int SleepDurationPreset;
 #define LAT_ADDR    192
 #define LON_ADDR    224
 #define LOCATION_ADDR   256
-#define LANGUAGE_ADDR 320
 #define HEMISPHERE_ADDR 352
 #define UNITS_ADDR 384
 #define TIMEZONE_ADDR 416

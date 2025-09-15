@@ -535,7 +535,7 @@ void DrawSmallWind(int x, int y, float angle, float windspeed) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y+15, WindDegToDirection(angle), CENTER);
   drawString(x+5, y+25, String(windspeed * 3.6, 1), CENTER);  
-  drawString(x+5, y+35, String(Units == "M" ? " km/h" : " mph"), CENTER);  
+  drawString(x+5, y+35, String(String(Units) == "M" ? " km/h" : " mph"), CENTER);  
 }
 //#########################################################################################
 void DrawWind(int x, int y, float angle, float windspeed) {
@@ -553,7 +553,7 @@ void DrawWind(int x, int y, float angle, float windspeed) {
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x - 7, y + Cradius + 10, WindDegToDirection(angle), CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-  drawString(x, y - Cradius - 14, String(windspeed, 1) + (Units == "M" ? " m/s" : " mph"), CENTER);
+  drawString(x, y - Cradius - 14, String(windspeed, 1) + (String(Units) == "M" ? " m/s" : " mph"), CENTER);
 }
 //#########################################################################################
 String WindDegToDirection(float winddirection) {
@@ -583,8 +583,8 @@ void arrow(int x, int y, int asize, float aangle, int pwidth, int plength) {
 }
 //#########################################################################################
 void DrawPressureTrend(int x, int y, float pressure, String slope) {
-  drawString(x, y, String(pressure, (Units == "M"?0:1)) + (Units == "M" ? "hPa" : "in"), LEFT);
-  x = x + 48 - (Units == "M"?0:15); y = y + 3;
+  drawString(x, y, String(pressure, (String(Units) == "M"?0:1)) + (String(Units) == "M" ? "hPa" : "in"), LEFT);
+  x = x + 48 - (String(Units) == "M"?0:15); y = y + 3;
   if      (slope == "+") {
     display.drawLine(x,  y, x + 4, y - 4, GxEPD_BLACK);
     display.drawLine(x + 4, y - 4, x + 8, y, GxEPD_BLACK);

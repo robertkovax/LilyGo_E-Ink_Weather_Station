@@ -1,5 +1,5 @@
 #include "common.h"
-#include "owm_credentials.h"
+#include "setup_server.h"
 
 
 //#########################################################################################
@@ -83,14 +83,14 @@ bool DecodeWeather(WiFiClient& json, const String& type) {
     if (pressure_trend < 0)  WxConditions[0].Trend = "-";
     if (pressure_trend == 0) WxConditions[0].Trend = "0";
 
-    if (Units == "I") Convert_Readings_to_Imperial();
+    if (String(Units) == "I") Convert_Readings_to_Imperial();
   }
 
   return true;
 }
 //#########################################################################################
 boolean SetupTime() {
-  configTime(gmtOffset_h * 3600, daylightOffset_h * 3600, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
+  configTime(gmtOffset_hour * 3600, daylightOffset_hour * 3600, ntpServer, "time.nist.gov"); //(gmtOffset_sec, daylightOffset_sec, ntpServer)
   setenv("TZ", Timezone, 1);  //setenv()adds the "TZ" variable to the environment with a value TimeZone, only used if set to 1, 0 means no change
   tzset(); // Set the TZ environment variable
   delay(100);
@@ -103,7 +103,7 @@ String ConvertUnixTime(int unix_time) {
   time_t tm = unix_time;
   struct tm* now_tm = gmtime(&tm);
   char output[40];
-  if (Units == "M") {
+  if (String(Units) == "M") {
     strftime(output, sizeof(output), "%H:%M %d/%m/%y", now_tm);
   } else {
     strftime(output, sizeof(output), "%I:%M%P %m/%d/%y", now_tm);
@@ -116,7 +116,7 @@ String GetForecastDay(int unix_time) {
   time_t tm = unix_time;
   struct tm *now_tm = localtime(&tm);
   char output[40], FDay[40];
-  if (Units == "M") {
+  if (String(Units) == "M") {
     strftime(output, sizeof(output), "%H:%M %d/%m/%y", now_tm);
     strftime(FDay, sizeof(FDay), "%w", now_tm);
   }
@@ -141,7 +141,7 @@ boolean UpdateLocalTime() {
   Serial.print("Time set: ");
   Serial.println(&timeinfo, "%a %b %d %Y   %H:%M:%S");      // Displays: Saturday, June 24 2017 14:05:49
   //Serial.println(&timeinfo, "%02d.%02m"); // Displays: 24.06
-  if (Units == "M") {
+  if (String(Units) == "M") {
     sprintf(day_output, "%s, %02u. %s %02u", weekday_D[timeinfo.tm_wday], timeinfo.tm_mday, month_M[timeinfo.tm_mon], (timeinfo.tm_year) % 100); // day_output >> So., 23. Juni 19 <<
     strftime(update_time, sizeof(update_time), "%H:%M", &timeinfo);  // Creates: '@ 14:05', 24h, no am or pm or seconds.   and change from 30 to 8 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
     strftime(dd_mm_output, sizeof(dd_mm_output), "%d.%m", &timeinfo);  // Creates '31.05'
@@ -175,14 +175,13 @@ int tomorrowStartIndex(int preferHourStart = 6){
 }
 //#########################################################################################
 bool obtain_wx_data(WiFiClient& client, const String& requestType) {
-  const String units = (Units == "M" ? "metric" : "imperial");
-
+  const String units = (String(Units) == "M" ? "metric" : "imperial");
   client.stop(); // close before new request
   HTTPClient http;
 
   // API v2.5 endpoint (OneCall v3.0 comment kept from original)
   String uri = "/data/2.5/" + requestType + "?lat=" + LAT + "&lon=" + LON +
-               "&appid=" + apikey + "&mode=json&units=" + units + "&lang=" + Language;
+               "&appid=" + apikey + "&mode=json&units=" + units + "&lang=EN";
 
   if (requestType != "weather") {
     uri += "&cnt=" + String(MaxReadings);

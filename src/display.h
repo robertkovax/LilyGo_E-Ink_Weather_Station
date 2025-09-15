@@ -7,7 +7,7 @@
 #include <GxEPD2_BW.h>
 #include <GxEPD2_3C.h>
 #include <U8g2_for_Adafruit_GFX.h>
-#include "owm_credentials.h"
+#include "setup_server.h"
 #include "lang.h"   
 #include "common.h"
 
@@ -26,10 +26,9 @@ enum alignmentType {
     CENTER
 };
 
-//------String------
+//------String write------
 void drawString(int x, int y, String text, alignmentType alignment);
 void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String& text, alignmentType align);
-static uint16_t textPixelWidth(const String& s);
 
 // -----Helper------
 void Draw_Grid();
@@ -67,15 +66,12 @@ void CloudCover(int x, int y, int CCover);
 void Visibility(int x, int y, String Visi);
 void Nodata(int x, int y, bool IconSize, String IconName);
 
-
+// ---- weather sections ----
 void DrawWind(int x, int y, float angle, float windspeed);
 void DrawSmallWind(int x, int y, float angle, float windspeed);
 String WindDegToDirection(float winddirection);
 void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere);
 String MoonPhase(int d, int m, int y, String hemisphere);
-
-
-
 
 
 #endif // WEATHER_ICONS_H

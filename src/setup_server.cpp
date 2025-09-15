@@ -1,16 +1,53 @@
-//Here are the WiFi credentials loaded from EEPROM (or owm_credentials.h at first boot after programming).
-//It provides a web interface for setting up the WiFi credentials, OpenWeatherMap API key, location data, and refresh period.
-//The web interface is accessible at http://192.168.4.1
-//Birthday greeting setup at: at http://192.168.4.1/popups (You can set up a birthday greeting that occurs every year.)
-//You can also erase the EEPROM to reset all settings to default values: http://192.168.4.1/erase_eeprom
+// The stored variables are loaded from EEPROM at startup (and initialized from the program variables in case the eeprom is erased)
+// It provides a web interface for setting up the WiFi credentials, OpenWeatherMap API key, location data, refresh period, etc.
 
-#include "wifi_setup.h"
-#include "owm_credentials.h"
+// Functions:
+// Setup: http://192.168.4.1
+// Popup messages: http://192.168.4.1/popups (e.g. birthday greeting that occur every year)
+// Erase EEPROM: http://192.168.4.1/erase_eeprom
+// Reboot: http://192.168.4.1/reboot
+
+#include "setup_server.h"
 #include <EEPROM.h>
 #include <WiFi.h>
 #include <WebServer.h>
 
 WebServer wifiServer(80);
+
+char weatherServer[] = "api.openweathermap.org"; 
+// example calls: https://api.openweathermap.org/data/2.5/weather?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
+//                https://api.openweathermap.org/data/2.5/forecast?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
+
+// --------------------------------- variable to set as defaults in EEPROM -------------------------------------------
+// -----------------------------(all these can be updated via the setup webpage) ---------------------------------
+
+//wifi credentials
+char ssid[64]     = "";
+char password[64] = "";
+
+// API Key
+char apikey[64]       = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
+
+// Location data
+char LAT[32]              = "";
+char LON[32]              = "";
+char Hemisphere[32]       = "north"; // this is used only for the moon phase calculation
+char Units[8]            = "M"; //M = metric, else imperial
+char Location_name[32]    = ""; // only for display purpose
+
+// Choose your time zone from: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv 
+char Timezone[32]    = "CET-1CEST,M3.5.0,M10.5.0/3"; //central EU
+
+// time setup for the ESP32 internal clock (the weather data already contains the timestamps)
+// best to use pool.ntp.org to find an NTP server then the NTP system tries to find the closest available servers
+// EU "0.europe.pool.ntp.org"
+// US "0.north-america.pool.ntp.org"
+// See: https://www.ntppool.org/en/
+char ntpServer[32]   = "pool.ntp.org";
+int gmtOffset_hour      = 1; //  in hous
+int daylightOffset_hour  = 1; // in hours
+
+// ----------------------------------------------- defaults end -----------------------------------------------------
 
 // Helper to read/write String to EEPROM
 void eeprom_write_string(int addr, const String& value, int maxlen) {
@@ -32,25 +69,25 @@ void load_config() {
   EEPROM.begin(EEPROM_SIZE);
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized) {
-    erase_eeprom(EEPROM_SIZE, 0x00); // Initialize EEPROM with default values
-    // EEPROM empty, use owm_credentials.h and save to EEPROM
+    erase_eeprom(EEPROM_SIZE, 0x00); 
+    // EEPROM empty, load from program variables
     eeprom_write_string(SSID_ADDR, String(::ssid), 64);
     eeprom_write_string(PASS_ADDR, String(::password), 64);
-    eeprom_write_string(APIKEY_ADDR, ::apikey, 64);
-    eeprom_write_string(LAT_ADDR, ::LAT, 32);
-    eeprom_write_string(LON_ADDR, ::LON, 32);
-    eeprom_write_string(LOCATION_ADDR, ::Location_name, 32);
-    eeprom_write_string(UNITS_ADDR, ::Units, 8);
+    eeprom_write_string(APIKEY_ADDR, String(::apikey), 64);
+    eeprom_write_string(LAT_ADDR, String(::LAT), 32);
+    eeprom_write_string(LON_ADDR, String(::LON), 32);
+    eeprom_write_string(LOCATION_ADDR, String(::Location_name), 32);
+    eeprom_write_string(UNITS_ADDR, String(::Units), 8);
     eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
     eeprom_write_string(NTPSERVER_ADDR, String(::ntpServer), 32);
-    EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_h >> 0) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+1, (uint8_t)((::gmtOffset_h >> 8) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+2, (uint8_t)((::gmtOffset_h >> 16) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR+3, (uint8_t)((::gmtOffset_h >> 24) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((::daylightOffset_h >> 0) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_h >> 8) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_h >> 16) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_h >> 24) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_hour >> 0) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+1, (uint8_t)((::gmtOffset_hour >> 8) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+2, (uint8_t)((::gmtOffset_hour >> 16) & 0xFF));
+    EEPROM.write(GMTOFFSET_ADDR+3, (uint8_t)((::gmtOffset_hour >> 24) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((::daylightOffset_hour >> 0) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+1, (uint8_t)((::daylightOffset_hour >> 8) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+2, (uint8_t)((::daylightOffset_hour >> 16) & 0xFF));
+    EEPROM.write(DAYLIGHT_ADDR+3, (uint8_t)((::daylightOffset_hour >> 24) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDurationPreset >> 0) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR+1, (uint8_t)((SleepDurationPreset >> 8) & 0xFF));
     EEPROM.write(SLEEPDURATION_ADDR+2, (uint8_t)((SleepDurationPreset >> 16) & 0xFF));
@@ -68,20 +105,19 @@ void load_config() {
   String units_str = eeprom_read_string(UNITS_ADDR, 8);
   String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
   String ntpserver_str = eeprom_read_string(NTPSERVER_ADDR, 32);
-  long gmtOffset = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
-  int daylightOffset = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
+  gmtOffset_hour = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
+  daylightOffset_hour = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
   SleepDurationPreset = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
-  ssid_str.toCharArray(ssid, 64);
-  pass_str.toCharArray(password, 64);
-  apikey = apikey_str;
-  LAT = lat_str;
-  LON = lon_str;
-  Location_name = location_str;
-  Units = units_str;
-  Timezone = strdup(timezone_str.c_str());
-  ntpServer = strdup(ntpserver_str.c_str());
-  gmtOffset_h = gmtOffset;
-  daylightOffset_h = daylightOffset;
+  ssid_str.toCharArray(ssid, sizeof(ssid));
+  pass_str.toCharArray(password, sizeof(password));
+  apikey_str.toCharArray(apikey, sizeof(apikey));
+  lat_str.toCharArray(LAT, sizeof(LAT));
+  lon_str.toCharArray(LON, sizeof(LON));
+  location_str.toCharArray(Location_name, sizeof(Location_name));
+  units_str.toCharArray(Units, sizeof(Units));
+  timezone_str.toCharArray(Timezone, sizeof(Timezone));
+  ntpserver_str.toCharArray(ntpServer, sizeof(ntpServer));
+  Serial.println(Units);
 }
 
 // Helper to get current config value for HTML
