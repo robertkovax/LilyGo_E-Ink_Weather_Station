@@ -107,7 +107,6 @@ HL_record_type  HLReadings[max_readings];
 //##################################################################################
 #define BUTTON_PIN 39
 //#define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
-RTC_DATA_ATTR bool first_boot = true;
 RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
 
@@ -116,31 +115,17 @@ void IRAM_ATTR handleButtonInterrupt() {
 
 //#########################################################################################
 void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
   StartTime = millis();
   Serial.begin(115200);
   Serial.println("Weather station active!");
-  Serial.print("Wakeup cause: ");
-  switch(esp_sleep_get_wakeup_cause()){
-    case 0: 
-      Serial.println("Power on / reset");
-      buttonWake_cnt = 0;
-      break;
-    case 2: 
-      Serial.println("External interrupt (button press)");
-      buttonWake_cnt++;
-      break;
-    case 4: Serial.println("Timer wakeup");
-      buttonWake_cnt = 0;
-      break;
-  }
   
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
-
   // Load WiFi credentials from EEPROM or defaults
   load_config();
   SleepDuration = SleepDurationPreset;
 
+  // init display in a separate process to speed up boot
   xTaskCreatePinnedToCore(
       DisplayInitTask, "DispInit",
       4096,            // stack size; bump to 6144/8192 if needed
@@ -150,7 +135,7 @@ void setup() {
       1                // core 1
   );
   
-
+  //if any of these function can send the controller into deep sleep
   CheckBattAbovePercentage(10);
   isSetupMode();
   connect2wifi();
@@ -158,9 +143,23 @@ void setup() {
   check4popups();
  
   //update display on wakeup
-  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || first_boot == true || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
+  Serial.print("Wakeup cause: ");
+  switch(esp_sleep_get_wakeup_cause()){
+    case 0: // show first screen always
+      Serial.println("Power on / reset");
+      buttonWake_cnt = 0;
+      break;
+    case 2: //cycle through the three screens
+      Serial.println("External interrupt (button press)");
+      buttonWake_cnt++;
+      break;
+    case 4: // show first screen always
+      Serial.println("Timer wakeup");
+      buttonWake_cnt = 0; 
+      break;
+  }
+  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
   || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
-    first_boot = false;
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
     get_weather_data("current");
@@ -528,14 +527,17 @@ void BeginSleep(long _sleepDuration) {
   StopWiFi();
   // Enable wakeup by timer and by button (ext0)
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
-  long SleepTimer = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((SleepTimer+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
+  if(_sleepDuration < 10)
+    _sleepDuration = _sleepDuration * 60;
+  else
+    _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
+  esp_sleep_enable_timer_wakeup((_sleepDuration+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
 #ifdef BUILTIN_LED
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Entering " + String(SleepTimer) + "-secs of sleep");
+  Serial.println("Entering " + String(_sleepDuration) + "-secs of sleep");
   delay(1000);
   esp_deep_sleep_start();  // Sleep for e.g. 30 minutes
 }
@@ -559,7 +561,7 @@ void InitialiseDisplay() {
 void DisplayInitTask(void *pv) {
 
   InitialiseDisplay();
-  Serial.println("display init finished");
+  Serial.println("Display init finished");
   displayReady = true;           // signal “done”
   vTaskDelete(NULL);             // kill this task
 }
