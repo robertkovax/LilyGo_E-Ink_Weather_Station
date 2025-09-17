@@ -65,7 +65,8 @@ static const uint8_t EPD_SCK  = 18;   //CLK on pinout?
 static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
 static const uint8_t EPD_MOSI = 23;
 
-GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 // #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;  // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
@@ -165,15 +166,17 @@ void setup() {
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     DisplayTodaysWeather();
-    display.display(false);
+    display.display(true); //partial update
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     ShowNextDayForecast();
-    display.display(false);
+    display.display(true); //partial update
     SleepDuration = 5;
     display.powerOff();
   } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  { 
@@ -181,8 +184,9 @@ void setup() {
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     Show4DayForecast();
-    display.display(false);
+    display.display(true); //partial update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -557,7 +561,7 @@ void BeginSleep(long _sleepDuration) {
 void InitialiseDisplay() {
   //display.init(115200, true, 0, false);
   display.init(0); //for older Waveshare HAT's
-  SPI.end();
+  //SPI.end();
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
   u8g2Fonts.begin(display);                  // connect u8g2 procedures to Adafruit GFX
@@ -565,9 +569,12 @@ void InitialiseDisplay() {
   u8g2Fonts.setFontDirection(0);             // left to right (this is default)
   u8g2Fonts.setForegroundColor(GxEPD_BLACK); // apply Adafruit GFX color
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
-  display.fillScreen(GxEPD_WHITE);
+  //u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
   display.setFullWindow();
+  display.fillScreen(GxEPD_WHITE);
+  display.display(true);
+  display.fillScreen(GxEPD_WHITE);
+  display.display(true);
 }
 //#########################################################################################
 void DisplayInitTask(void *pv) {

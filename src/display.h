@@ -11,7 +11,7 @@
 #include "lang.h"   
 #include "common.h"
 
-extern GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display;
+extern GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display;
 extern U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
 
 // Optional externs for constants used by the functions (define them in one .cpp)
