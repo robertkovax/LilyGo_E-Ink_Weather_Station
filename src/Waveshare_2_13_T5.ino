@@ -168,7 +168,10 @@ void setup() {
     StopWiFi();
     while (!displayReady);
     DisplayTodaysWeather();
-    display.display(true); //partial update
+    if(esp_sleep_get_wakeup_cause() == 0 || esp_sleep_get_wakeup_cause() == 4)
+      display.display(false); //full refresh
+    else
+      display.display(true); //partial update
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Showing next day's forecast");
@@ -571,8 +574,8 @@ void InitialiseDisplay() {
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
   //u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
   display.setFullWindow();
-  display.fillScreen(GxEPD_WHITE);
-  display.display(true);
+  //display.fillScreen(GxEPD_BLACK);
+  //display.display(true);
   display.fillScreen(GxEPD_WHITE);
   display.display(true);
 }
