@@ -210,7 +210,7 @@ void DisplayTodaysWeather() {             // 2.13" e-paper display is 250x122 us
   for (int i = 0; i <= 4; i++){
     Draw_3hr_Forecast(i*43, 96, i);
   }
-  DisplayAstronomySection(144, 18); // Astronomy section Sun rise/set and Moon phase plus icon
+  DisplayAstronomySection(142, 18); // Astronomy section Sun rise/set and Moon phase plus icon
   DrawSmallWind(231, 75, WxConditions[0].Winddir, WxConditions[0].Windspeed);
   DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
 }
@@ -298,8 +298,11 @@ void DisplayAstronomySection(int x, int y) {
   const int day_utc   = now_utc->tm_mday;
   const int month_utc = now_utc->tm_mon + 1;
   const int year_utc  = now_utc->tm_year + 1900;
-  drawString(x, y + 33, MoonPhase(day_utc, month_utc, year_utc, Hemisphere), LEFT);
-  DrawMoon(x+60, y-15, day_utc, month_utc, year_utc, Hemisphere);
+  int moonPercentage = NormalizedMoonPhase(day_utc, month_utc, year_utc) * 100;
+  if (moonPercentage <= 50) moonPercentage = moonPercentage * 2;
+  if (moonPercentage > 50) moonPercentage = (100 - moonPercentage) * 2;
+  drawString(x, y + 33, MoonPhase(day_utc, month_utc, year_utc) + " " + moonPercentage + "%", LEFT);
+  DrawMoon(x+62, y-15, day_utc, month_utc, year_utc, Hemisphere);
 }
 //#########################################################################################
 void DisplayWXicon(int x, int y, String IconName, bool IconSize) {

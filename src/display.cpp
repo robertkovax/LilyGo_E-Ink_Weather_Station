@@ -460,57 +460,44 @@ void Nodata(int x, int y, bool IconSize, String IconName) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
 }
 //#########################################################################################
-String MoonPhase(int d, int m, int y, String hemisphere) {
-  int c, e;
-  double jd;
-  int b;
-  if (m < 3) {
-    y--;
-    m += 12;
-  }
-  ++m;
-  c   = 365.25 * y;
-  e   = 30.6  * m;
-  jd  = c + e + d - 694039.09;     /* jd is total days elapsed */
-  jd /= 29.53059;                        /* divide by the moon cycle (29.53 days) */
-  b   = jd;                              /* int(jd) -> b, take integer part of jd */
-  jd -= b;                               /* subtract integer part to leave fractional part of original jd */
-  b   = jd * 8 + 0.5;                /* scale fraction from 0-8 and round by adding 0.5 */
-  b   = b & 7;                           /* 0 and 8 are the same phase so modulo 8 for 0 */
-  if (hemisphere == "south") b = 7 - b;
-  if (b == 0) return TXT_MOON_NEW;              // New;              0%  illuminated
-  if (b == 1) return TXT_MOON_WAXING_CRESCENT;  // Waxing crescent; 25%  illuminated
-  if (b == 2) return TXT_MOON_FIRST_QUARTER;    // First quarter;   50%  illuminated
-  if (b == 3) return TXT_MOON_WAXING_GIBBOUS;   // Waxing gibbous;  75%  illuminated
-  if (b == 4) return TXT_MOON_FULL;             // Full;            100% illuminated
-  if (b == 5) return TXT_MOON_WANING_GIBBOUS;   // Waning gibbous;  75%  illuminated
-  if (b == 6) return TXT_MOON_THIRD_QUARTER;    // Third quarter;   50%  illuminated
-  if (b == 7) return TXT_MOON_WANING_CRESCENT;  // Waning crescent; 25%  illuminated
-  return "";
-}
-//#########################################################################################
 void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere) {
-  const int diameter = 28;
+  const int diameter = 28;               // tweak as you like
+  const int number_of_lines = 90;        // rendering resolution (radial scan lines)
+  const double eps = 1e-6;               // avoid edge-case degeneracy
+
+  // 0 = New, 0.5 = Full, 1.0 = New
   double Phase = NormalizedMoonPhase(dd, mm, yy);
-  hemisphere.toLowerCase();
-  if (hemisphere == "south") Phase = 1 - Phase;
-  // Draw dark part of moon
+  //rotate by 180° for the drawing logic
+  Phase = fmod(Phase + 0.5, 1.0);   // <<--- SHIFT HERE
+
+  // Flip for southern hemisphere so waxing lights the LEFT, waning the RIGHT (as seen in south)
+  if (hemisphere.equalsIgnoreCase("south")) {
+    Phase = 1.0 - Phase;
+  }
+  // Clamp away from exact edges to keep the limb math stable
+  if (Phase <= 0.0) Phase = eps;
+  if (Phase >= 1.0) Phase = 1.0 - eps;
+
+  // --- Background disk (dark part) ---
   display.fillCircle(x + diameter - 1, y + diameter, diameter / 2 + 1, GxEPD_BLACK);
-  const int number_of_lines = 90;
+
+  // --- Scanline fill of illuminated part ---
   for (double Ypos = 0; Ypos <= number_of_lines / 2; Ypos++) {
-    double Xpos = sqrt(number_of_lines / 2 * number_of_lines / 2 - Ypos * Ypos);
-    // Determine the edges of the lighted part of the moon
-    double Rpos = 2 * Xpos;
+    double Xpos = sqrt( (number_of_lines / 2.0) * (number_of_lines / 2.0) - Ypos * Ypos );
+    double Rpos = 2.0 * Xpos;
     double Xpos1, Xpos2;
+
+    //   0..0.5  = waxing (light on RIGHT in north, LEFT in south)
+    //   0.5..1  = waning
     if (Phase < 0.5) {
       Xpos1 = -Xpos;
-      Xpos2 = Rpos - 2 * Phase * Rpos - Xpos;
+      Xpos2 = Rpos - 2.0 * Phase * Rpos - Xpos;
+    } else {
+      Xpos1 =  Xpos;
+      Xpos2 =  Xpos - 2.0 * Phase * Rpos + Rpos;
     }
-    else {
-      Xpos1 = Xpos;
-      Xpos2 = Xpos - 2 * Phase * Rpos + Rpos;
-    }
-    // Draw light part of moon
+
+    // Map unit coords to screen pixels
     double pW1x = (Xpos1 + number_of_lines) / number_of_lines * diameter + x;
     double pW1y = (number_of_lines - Ypos)  / number_of_lines * diameter + y;
     double pW2x = (Xpos2 + number_of_lines) / number_of_lines * diameter + x;
@@ -519,11 +506,14 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere) {
     double pW3y = (Ypos + number_of_lines)  / number_of_lines * diameter + y;
     double pW4x = (Xpos2 + number_of_lines) / number_of_lines * diameter + x;
     double pW4y = (Ypos + number_of_lines)  / number_of_lines * diameter + y;
+
     display.drawLine(pW1x, pW1y, pW2x, pW2y, GxEPD_WHITE);
     display.drawLine(pW3x, pW3y, pW4x, pW4y, GxEPD_WHITE);
   }
+  // Rim
   display.drawCircle(x + diameter - 1, y + diameter, diameter / 2, GxEPD_BLACK);
 }
+
 //#########################################################################################
 // Squeeze some wind info into a tiny space - just the speed, direction, and an arrow
 // No nice compass :-(
@@ -554,12 +544,6 @@ void DrawWind(int x, int y, float angle, float windspeed) {
   drawString(x - 7, y + Cradius + 10, WindDegToDirection(angle), CENTER);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y - Cradius - 14, String(windspeed, 1) + (String(Units) == "M" ? " m/s" : " mph"), CENTER);
-}
-//#########################################################################################
-String WindDegToDirection(float winddirection) {
-  int dir = int((winddirection / 22.5) + 0.5);
-  String Ord_direction[16] = {TXT_N, TXT_NNE, TXT_NE, TXT_ENE, TXT_E, TXT_ESE, TXT_SE, TXT_SSE, TXT_S, TXT_SSW, TXT_SW, TXT_WSW, TXT_W, TXT_WNW, TXT_NW, TXT_NNW};
-  return Ord_direction[(dir % 16)];
 }
 //#########################################################################################
 void arrow(int x, int y, int asize, float aangle, int pwidth, int plength) {

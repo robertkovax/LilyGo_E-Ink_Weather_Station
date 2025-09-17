@@ -43,7 +43,7 @@ http://192.168.4.1/popups
 
 This will show your greeting message every year on the set date:
 
-![Bday greeting](./LilyGo_213_Bday_greeting.jpg)
+![Bday greeting](./LilyGo_213_Bday_popup.jpg)
 
 ## Hardware
 - ESP32 e-ink display module (~$15): https://lilygo.cc/en-pl/products/t5-2-13inch-e-paper

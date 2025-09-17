@@ -216,20 +216,6 @@ float hPa_to_inHg(float value_hPa)
   return 0.02953 * value_hPa;
 }
 //#########################################################################################
-int JulianDate(int d, int m, int y) {
-  int mm, yy, k1, k2, k3, j;
-  yy = y - (int)((12 - m) / 10);
-  mm = m + 9;
-  if (mm >= 12) mm = mm - 12;
-  k1 = (int)(365.25 * (yy + 4712));
-  k2 = (int)(30.6001 * mm + 0.5);
-  k3 = (int)((int)((yy / 100) + 49) * 0.75) - 38;
-  // 'j' for dates in Julian calendar:
-  j = k1 + k2 + d + 59 + 1;
-  if (j > 2299160) j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
-  return j;
-}
-//#########################################################################################
 float SumOfPrecip(float DataArray[], int readings) {
   float sum = 0;
   for (int i = 0; i < readings; i++) {
@@ -247,9 +233,53 @@ String TitleCase(String text){
   else return text;
 }
 //#########################################################################################
-double NormalizedMoonPhase(int d, int m, int y) {
-  int j = JulianDate(d, m, y);
-  //Calculate the approximate phase of the moon
-  double Phase = (j + 4.867) / 29.53059;
-  return (Phase - (int) Phase);
+int JulianDate(int d, int m, int y) {
+  int mm, yy, k1, k2, k3, j;
+  yy = y - (int)((12 - m) / 10);
+  mm = m + 9;
+  if (mm >= 12) mm = mm - 12;
+  k1 = (int)(365.25 * (yy + 4712));
+  k2 = (int)(30.6001 * mm + 0.5);
+  k3 = (int)((int)((yy / 100) + 49) * 0.75) - 38;
+  // 'j' for dates in Julian calendar:
+  j = k1 + k2 + d + 59 + 1;
+  if (j > 2299160) j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
+  return j;
 }
+
+//#########################################################################################
+
+double NormalizedMoonPhase(int d, int m, int y) {
+  int j = JulianDate(d, m, y);          // JDN at 12:00 UT
+  double phase = (j + C_NEW) / P;
+  phase -= (int)phase;                   // keep fractional part in [0,1)
+  if (phase < 0) phase += 1.0;
+  return phase;                          // 0=new, ~0.5=full
+}
+
+//#########################################################################################
+String MoonPhase(int d, int m, int y) {
+  // Get fractional phase [0.0 .. 1.0)
+  double phase = NormalizedMoonPhase(d, m, y);
+
+  // Map to 0–7 (8 buckets)
+  int b = (int)(phase * 8 + 0.5) & 7;
+
+  if (b == 0) return TXT_MOON_NEW;
+  if (b == 1) return TXT_MOON_WAXING_CRESCENT;
+  if (b == 2) return TXT_MOON_FIRST_QUARTER;
+  if (b == 3) return TXT_MOON_WAXING_GIBBOUS;
+  if (b == 4) return TXT_MOON_FULL;
+  if (b == 5) return TXT_MOON_WANING_GIBBOUS;
+  if (b == 6) return TXT_MOON_THIRD_QUARTER;
+  if (b == 7) return TXT_MOON_WANING_CRESCENT;
+  return "";
+}
+
+//#########################################################################################
+String WindDegToDirection(float winddirection) {
+  int dir = int((winddirection / 22.5) + 0.5);
+  String Ord_direction[16] = {TXT_N, TXT_NNE, TXT_NE, TXT_ENE, TXT_E, TXT_ESE, TXT_SE, TXT_SSE, TXT_S, TXT_SSW, TXT_SW, TXT_WSW, TXT_W, TXT_WNW, TXT_NW, TXT_NNW};
+  return Ord_direction[(dir % 16)];
+}
+//#########################################################################################

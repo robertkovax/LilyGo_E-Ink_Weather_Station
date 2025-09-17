@@ -9,6 +9,11 @@
 #include "lang.h" 
 #include "forecast_record.h"
 
+// Synodic month (days)
+static constexpr double P = 29.53059;
+// Calibrated so phase = 0.0 at New Moon: 2025-09-21 19:54 UTC
+static constexpr double C_NEW = 20.9190733334;
+
 // ==== Externs (declared in main)
 extern Forecast_record_type   WxForecast[];   // from forecast_record.h
 extern Forecast_record_type WxConditions[]; // from forecast_record.h
@@ -32,5 +37,7 @@ int JulianDate(int d, int m, int y);
 float SumOfPrecip(float DataArray[], int readings);
 String TitleCase(String text);
 double NormalizedMoonPhase(int d, int m, int y);
+String MoonPhase(int d, int m, int y);
+String WindDegToDirection(float winddirection);
 
 #endif // COMMON_H_
