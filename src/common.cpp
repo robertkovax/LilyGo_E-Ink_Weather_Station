@@ -249,12 +249,18 @@ int JulianDate(int d, int m, int y) {
 
 //#########################################################################################
 
-double NormalizedMoonPhase(int d, int m, int y) {
-  int j = JulianDate(d, m, y);          // JDN at 12:00 UT
-  double phase = (j + C_NEW) / P;
-  phase -= (int)phase;                   // keep fractional part in [0,1)
+double NormalizedMoonPhase(int d, int m, int y, int hh) {
+  int jNoon = JulianDate(d, m, y);   // JDN at 12:00 UT
+
+  // Fraction of a day relative to 12:00 UT
+  double fracDay = (hh - 12) / 24.0;
+  double J = jNoon + fracDay;
+
+  // Normalize to [0,1)
+  double phase = fmod((J + C_NEW) / P, 1.0);
   if (phase < 0) phase += 1.0;
-  return phase;                          // 0=new, ~0.5=full
+
+  return phase;
 }
 
 //#########################################################################################

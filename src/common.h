@@ -36,7 +36,7 @@ float hPa_to_inHg(float value_hPa);
 int JulianDate(int d, int m, int y);
 float SumOfPrecip(float DataArray[], int readings);
 String TitleCase(String text);
-double NormalizedMoonPhase(int d, int m, int y);
+double NormalizedMoonPhase(int d, int m, int y, int hh = 12);
 String MoonPhase(int d, int m, int y);
 String WindDegToDirection(float winddirection);
 

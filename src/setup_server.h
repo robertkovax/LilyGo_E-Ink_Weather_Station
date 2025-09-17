@@ -26,10 +26,8 @@ extern int daylightOffset_hour;
 #define LAT_ADDR    192
 #define LON_ADDR    224
 #define LOCATION_ADDR   256
-#define HEMISPHERE_ADDR 352
 #define UNITS_ADDR 384
 #define TIMEZONE_ADDR 416
-#define NTPSERVER_ADDR 448
 #define GMTOFFSET_ADDR 480
 #define DAYLIGHT_ADDR 484
 #define SLEEPDURATION_ADDR 488

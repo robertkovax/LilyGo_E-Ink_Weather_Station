@@ -460,7 +460,7 @@ void Nodata(int x, int y, bool IconSize, String IconName) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
 }
 //#########################################################################################
-void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere) {
+void DrawMoon(int x, int y, int dd, int mm, int yy) {
   const int diameter = 28;               // tweak as you like
   const int number_of_lines = 90;        // rendering resolution (radial scan lines)
   const double eps = 1e-6;               // avoid edge-case degeneracy
@@ -471,7 +471,7 @@ void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere) {
   Phase = fmod(Phase + 0.5, 1.0);   // <<--- SHIFT HERE
 
   // Flip for southern hemisphere so waxing lights the LEFT, waning the RIGHT (as seen in south)
-  if (hemisphere.equalsIgnoreCase("south")) {
+  if (LAT < 0) {
     Phase = 1.0 - Phase;
   }
   // Clamp away from exact edges to keep the limb math stable

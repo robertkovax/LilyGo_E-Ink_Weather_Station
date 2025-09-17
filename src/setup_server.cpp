@@ -14,36 +14,34 @@
 
 WebServer wifiServer(80);
 
-char weatherServer[] = "api.openweathermap.org"; 
-// example calls: https://api.openweathermap.org/data/2.5/weather?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
-//                https://api.openweathermap.org/data/2.5/forecast?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
-
-// --------------------------------- variable to set as defaults in EEPROM -------------------------------------------
-// -----------------------------(all these can be updated via the setup webpage) ---------------------------------
-
-//wifi credentials
-char ssid[64]     = "";
-char password[64] = "";
-
-// API Key
-char apikey[64]       = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
-
-// Location data
-char LAT[32]              = "";
-char LON[32]              = "";
-char Hemisphere[32]       = "north"; // this is used only for the moon phase calculation
-char Units[8]            = "M"; //M = metric, else imperial
-char Location_name[32]    = ""; // only for display purpose
-
-// Choose your time zone from: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv 
-char Timezone[32]    = "CET-1CEST,M3.5.0,M10.5.0/3"; //central EU
-
 // time setup for the ESP32 internal clock (the weather data already contains the timestamps)
 // best to use pool.ntp.org to find an NTP server then the NTP system tries to find the closest available servers
 // EU "0.europe.pool.ntp.org"
 // US "0.north-america.pool.ntp.org"
 // See: https://www.ntppool.org/en/
 char ntpServer[32]   = "pool.ntp.org";
+
+// weather server
+// example calls: https://api.openweathermap.org/data/2.5/weather?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
+//                https://api.openweathermap.org/data/2.5/forecast?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
+char weatherServer[] = "api.openweathermap.org"; 
+
+
+// --------------------------------- variable to set as defaults in EEPROM -------------------------------------------
+// -----------------------------(these can be updated via the setup webpage) ---------------------------------
+
+//wifi credentials
+char ssid[64]     = "";
+char password[64] = "";
+// API Key
+char apikey[64]       = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
+// Location data
+char LAT[32]              = "";
+char LON[32]              = "";
+char Units[8]            = "M"; //M = metric, else imperial
+char Location_name[32]    = ""; // only for display purpose
+// Choose your time zone from: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv 
+char Timezone[32]    = "CET-1CEST,M3.5.0,M10.5.0/3"; //central EU
 int gmtOffset_hour      = 1; //  in hous
 int daylightOffset_hour  = 1; // in hours
 
@@ -79,7 +77,6 @@ void load_config() {
     eeprom_write_string(LOCATION_ADDR, String(::Location_name), 32);
     eeprom_write_string(UNITS_ADDR, String(::Units), 8);
     eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
-    eeprom_write_string(NTPSERVER_ADDR, String(::ntpServer), 32);
     EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_hour >> 0) & 0xFF));
     EEPROM.write(GMTOFFSET_ADDR+1, (uint8_t)((::gmtOffset_hour >> 8) & 0xFF));
     EEPROM.write(GMTOFFSET_ADDR+2, (uint8_t)((::gmtOffset_hour >> 16) & 0xFF));
@@ -104,7 +101,6 @@ void load_config() {
   String location_str = eeprom_read_string(LOCATION_ADDR, 32);
   String units_str = eeprom_read_string(UNITS_ADDR, 8);
   String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
-  String ntpserver_str = eeprom_read_string(NTPSERVER_ADDR, 32);
   gmtOffset_hour = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
   daylightOffset_hour = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
   SleepDurationPreset = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
@@ -116,7 +112,6 @@ void load_config() {
   location_str.toCharArray(Location_name, sizeof(Location_name));
   units_str.toCharArray(Units, sizeof(Units));
   timezone_str.toCharArray(Timezone, sizeof(Timezone));
-  ntpserver_str.toCharArray(ntpServer, sizeof(ntpServer));
   Serial.println(Units);
 }
 

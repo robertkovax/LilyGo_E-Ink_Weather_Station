@@ -69,7 +69,7 @@ void Nodata(int x, int y, bool IconSize, String IconName);
 // ---- weather sections ----
 void DrawWind(int x, int y, float angle, float windspeed);
 void DrawSmallWind(int x, int y, float angle, float windspeed);
-void DrawMoon(int x, int y, int dd, int mm, int yy, String hemisphere);
+void DrawMoon(int x, int y, int dd, int mm, int yy);
 
 
 #endif // WEATHER_ICONS_H
