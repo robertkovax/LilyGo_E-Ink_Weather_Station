@@ -51,12 +51,11 @@
 #include "setup_server.h"
 #include "common.h"
  
-// ################ DISPLAY #############################################################
+// ################ DISPLAY Lilygo TTGO T5 V2.3_2.13 #######################################
+// https://github.com/lewisxhe/TTGO-EPaper-Series#board-pins
 #define SCREEN_WIDTH   250
 #define SCREEN_HEIGHT  122
 
-// Connections for Lilygo TTGO T5 V2.3_2.13 from
-// https://github.com/lewisxhe/TTGO-EPaper-Series#board-pins
 static const uint8_t EPD_BUSY = 4;
 static const uint8_t EPD_CS   = 5;
 static const uint8_t EPD_RST  = 16; 
@@ -65,7 +64,8 @@ static const uint8_t EPD_SCK  = 18;   //CLK on pinout?
 static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
 static const uint8_t EPD_MOSI = 23;
 
-GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 // #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;  // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
@@ -73,10 +73,16 @@ U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;  // Select u8g2 font from here: https://github.
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
 
-//################ VARIABLES #############################################################
+//################ TIME VARIABLES ##########################################################
 String  time_str, date_str, date_dd_mm_str; // strings to hold time and date
 int     wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
 long    StartTime = 0;
+
+typedef struct { // For current Day and Day 1, 2, 3, etc
+  String Time;
+  float  High;
+  float  Low;
+} HL_record_type;
 
 //################ PROGRAM VARIABLES and OBJECTS ##########################################
 #define max_readings 40
@@ -88,43 +94,50 @@ float rain_readings[max_readings]        = {0};
 float snow_readings[max_readings]        = {0};
 Forecast_record_type  WxConditions[1];
 Forecast_record_type  WxForecast[max_readings];
+HL_record_type  HLReadings[max_readings];
 
-//this is here the initial value, it will be updated from the EEPROM  after setting a value in the web interface
 // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
-int SleepDurationPreset = 60; // will be overwritten in load_config()
+int SleepDurationPreset = 60; // default, it will be overwritten in load_config() from EEPROM;
 int SleepDuration;
 int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
 int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
 
-typedef struct { // For current Day and Day 1, 2, 3, etc
-  String Time;
-  float  High;
-  float  Low;
-} HL_record_type;
-
-HL_record_type  HLReadings[max_readings];
-
-//##################################################################################
+//############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
 #define BUTTON_PIN 39
 //#define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
-
 void IRAM_ATTR handleButtonInterrupt() {
 }
 
-//#########################################################################################
+//############### PROGRAM ##########################################################################
 void setup() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
   StartTime = millis();
   Serial.begin(115200);
   Serial.println("Weather station active!");
-  
   // Load WiFi credentials from EEPROM or defaults
   load_config();
   SleepDuration = SleepDurationPreset;
 
+  //button update logic
+  Serial.print("Wakeup cause: ");
+  switch(esp_sleep_get_wakeup_cause()){
+    case 0: // show first screen
+      Serial.println("Power on / reset");
+      buttonWake_cnt = 0;
+      break;
+    case 2: //cycle through the three screens
+      Serial.println("External interrupt (button press)");
+      buttonWake_cnt++;
+      break;
+    case 4: // show first screen
+      Serial.println("Timer wakeup");
+      buttonWake_cnt = 0; 
+      break;
+  }
+  
   // init display in a separate process to speed up boot
   xTaskCreatePinnedToCore(
       DisplayInitTask, "DispInit",
@@ -142,22 +155,7 @@ void setup() {
   getTime();
   check4popups();
  
-  //update display on wakeup logic
-  Serial.print("Wakeup cause: ");
-  switch(esp_sleep_get_wakeup_cause()){
-    case 0: // show first screen
-      Serial.println("Power on / reset");
-      buttonWake_cnt = 0;
-      break;
-    case 2: //cycle through the three screens
-      Serial.println("External interrupt (button press)");
-      buttonWake_cnt++;
-      break;
-    case 4: // show first screen
-      Serial.println("Timer wakeup");
-      buttonWake_cnt = 0; 
-      break;
-  }
+  // content logic
   if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
   || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
     buttonWake_cnt = 0;
@@ -165,15 +163,20 @@ void setup() {
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     DisplayTodaysWeather();
-    display.display(false);
+    if(esp_sleep_get_wakeup_cause() == 0 || esp_sleep_get_wakeup_cause() == 4)
+      display.display(false); //full refresh
+    else
+      display.display(true); //partial update
     display.powerOff();
   }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     ShowNextDayForecast();
-    display.display(false);
+    display.display(true); //partial update
     SleepDuration = 5;
     display.powerOff();
   } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  { 
@@ -181,8 +184,9 @@ void setup() {
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
+    while (!displayReady);
     Show4DayForecast();
-    display.display(false);
+    display.display(true); //partial update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -556,19 +560,29 @@ void BeginSleep(long _sleepDuration) {
 //#########################################################################################
 void InitialiseDisplay() {
   //display.init(115200, true, 0, false);
-  display.init(0); //for older Waveshare HAT's
-  SPI.end();
+  display.init(0);
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+
+  // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
   u8g2Fonts.begin(display);                  // connect u8g2 procedures to Adafruit GFX
   u8g2Fonts.setFontMode(1);                  // use u8g2 transparent mode (this is default)
   u8g2Fonts.setFontDirection(0);             // left to right (this is default)
   u8g2Fonts.setForegroundColor(GxEPD_BLACK); // apply Adafruit GFX color
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
-  u8g2Fonts.setFont(u8g2_font_helvB10_tf);   // Explore u8g2 fonts from here: https://github.com/olikraus/u8g2/wiki/fntlistall
-  display.fillScreen(GxEPD_WHITE);
+  //u8g2Fonts.setFont(u8g2_font_helvB10_tf);   
   display.setFullWindow();
+  if((esp_sleep_get_wakeup_cause() == 2 || esp_sleep_get_wakeup_cause() == 0) && (buttonWake_cnt <= 0 || buttonWake_cnt >= 3)){
+    display.fillScreen(GxEPD_BLACK);
+    display.display(true);
+    display.fillScreen(GxEPD_WHITE);
+    display.display(true);
+  }else{
+    display.fillScreen(GxEPD_WHITE);
+    display.display(true);
+  }
 }
+  
 //#########################################################################################
 void DisplayInitTask(void *pv) {
 
