@@ -316,7 +316,6 @@ void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
   else                                              Nodata(x, y, IconSize, IconName);        //Serial.println("Nodata");}
 }
 //#########################################################################################
-//#########################################################################################
 void get_weather_data(String type){
   byte get_weather_cnt = 0;
   bool receivedOk = false;
@@ -551,10 +550,8 @@ void BeginSleep(long _sleepDuration) {
 }
 //#########################################################################################
 void InitialiseDisplay() {
-  //display.init(115200, true, 0, false);
-  display.init(0);
+  display.init(0, false, 20); //don't enforce full update at every cold start
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
-
   // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
   u8g2Fonts.begin(display);                  // connect u8g2 procedures to Adafruit GFX

@@ -1,9 +1,9 @@
 // Display Library for SPI e-paper panels from Dalian Good Display and boards from Waveshare.
 // Requires HW SPI and Adafruit_GFX. Caution: the e-paper panels require 3.3V supply AND data lines!
 //
-// Panel: DEPG0213BN : https://www.dke.top/products/213-eiink-display
-// Controller : SSD1680 : https://www.good-display.com/companyfile/101.html
-// Display: LILYGO® T5 V2.3.1 2.13 inch : https://www.aliexpress.com/item/32869729970.html
+// based on Demo Example from Good Display, available here: https://www.good-display.com/comp/xcompanyFile/downloadNew.do?appId=24&fid=2456&id=1845
+// Panel: GDEM0397T81 : https://www.good-display.com/product/613.html
+// Controller : SSD2677 : https://v4.cecdn.yun300.cn/100001_1909185148/SSD2677%28Rev1.1%29N.pdf
 //
 // Author: Jean-Marc Zingg
 //
@@ -11,28 +11,29 @@
 //
 // Library: https://github.com/ZinggJM/GxEPD2
 
-#ifndef _GxEPD2_213_BN_H_
-#define _GxEPD2_213_BN_H_
+#ifndef _GxEPD2_397_GDEM0397T81_H_
+#define _GxEPD2_397_GDEM0397T81_H_
 
 #include "../GxEPD2_EPD.h"
 
-class GxEPD2_213_BN : public GxEPD2_EPD
+class GxEPD2_397_GDEM0397T81 : public GxEPD2_EPD
 {
   public:
     // attributes
-    static const uint16_t WIDTH = 128;
-    static const uint16_t WIDTH_VISIBLE = 122;
-    static const uint16_t HEIGHT = 250;
-    static const GxEPD2::Panel panel = GxEPD2::DEPG0213BN;
+    static const uint16_t WIDTH = 800; // source, max 960
+    static const uint16_t WIDTH_VISIBLE = WIDTH;
+    static const uint16_t HEIGHT = 480; // gates, max 680
+    static const GxEPD2::Panel panel = GxEPD2::GDEM0397T81;
     static const bool hasColor = false;
     static const bool hasPartialUpdate = true;
     static const bool hasFastPartialUpdate = true;
-    static const uint16_t power_on_time = 100; // ms, e.g. 95868us
-    static const uint16_t power_off_time = 250; // ms, e.g. 140350us
-    static const uint16_t full_refresh_time = 4100; // ms, e.g. 4011934us
-    static const uint16_t partial_refresh_time = 750; // ms, e.g. 736721us
+    static const bool useFastFullUpdate = true; // set false for extended (low) temperature range
+    static const uint16_t power_on_time = 100; // ms, e.g. 83873us
+    static const uint16_t power_off_time = 200; // ms, e.g. 138810us
+    static const uint16_t full_refresh_time = 1900; // ms, e.g. 1837000us / 4278000us
+    static const uint16_t partial_refresh_time = 410; // ms, e.g. 408000us
     // constructor
-    GxEPD2_213_BN(int16_t cs, int16_t dc, int16_t rst, int16_t busy);
+    GxEPD2_397_GDEM0397T81(int16_t cs, int16_t dc, int16_t rst, int16_t busy);
     // methods (virtual)
     //  Support for Bitmaps (Sprites) to Controller Buffer and to Screen
     void clearScreen(uint8_t value = 0xFF); // init controller memory and screen (default white)
@@ -65,6 +66,7 @@ class GxEPD2_213_BN : public GxEPD2_EPD
     void refresh(int16_t x, int16_t y, int16_t w, int16_t h); // screen refresh from controller memory, partial screen
     void powerOff(); // turns off generation of panel driving voltages, avoids screen fading over time
     void hibernate(); // turns powerOff() and sets controller to deep sleep for minimum power use, ONLY if wakeable by RST (rst >= 0)
+    void selectFastFullUpdate(bool);
   private:
     void _writeScreenBuffer(uint8_t command, uint8_t value);
     void _writeImage(uint8_t command, const uint8_t bitmap[], int16_t x, int16_t y, int16_t w, int16_t h, bool invert = false, bool mirror_y = false, bool pgm = false);
@@ -74,11 +76,10 @@ class GxEPD2_213_BN : public GxEPD2_EPD
     void _PowerOn();
     void _PowerOff();
     void _InitDisplay();
-    void _Init_Part();
     void _Update_Full();
     void _Update_Part();
   private:
-    static const unsigned char lut_partial[];
+    bool _use_fast_update;
 };
 
 #endif

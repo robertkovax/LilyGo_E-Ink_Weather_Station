@@ -8,6 +8,8 @@
         "new": "cpp",
         "ostream": "cpp",
         "sstream": "cpp",
-        "streambuf": "cpp"
+        "streambuf": "cpp",
+        "unordered_map": "cpp",
+        "istream": "cpp"
     }
 }

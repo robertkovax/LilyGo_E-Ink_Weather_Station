@@ -347,12 +347,12 @@ void handle_popups_root() {
 
 void handle_wifi_root() {
   String form = "";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi Settings</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi settings</legend>";
   String ssid_val = eeprom_read_string(SSID_ADDR, 64);
   form += html_input("ssid", ssid_val, false, nullptr, nullptr);
   form += html_input("pass", "", true, nullptr, nullptr);
   form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Geo Settings</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Geo settings</legend>";
   String lat_val = eeprom_read_string(LAT_ADDR, 32);
   String lon_val = eeprom_read_string(LON_ADDR, 32);
   String location_val = eeprom_read_string(LOCATION_ADDR, 32);
@@ -364,12 +364,12 @@ void handle_wifi_root() {
   form += html_input("lat", lat_val, false, nullptr, nullptr);
   form += html_input("lon", lon_val, false, nullptr, nullptr);
   form += html_input("location", location_val, false, "location", "name of the place to display");
-  form += html_input("units", units_val, false, nullptr, "M - metric (Celsius), I - imperial (Farenheit)");
+  form += html_input("units", units_val, false, nullptr, "M - metric (Celsius), I - imperial (Fahrenheit)");
   form += html_input("timezone", timezone_val, false, "time zone", "see: <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [h]", "(e.g. -8 for GMT-8)");
   form += html_input("daylight", daylight_val, false, "daylight saving offset [h]", "(e.g. 1 for 1 hour, 0 if not used)");
    form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh Period</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh period</legend>";
   form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 30 min)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>OpenWeatherMap API</legend>";
