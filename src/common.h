@@ -12,7 +12,16 @@
 // Synodic month (days)
 static constexpr double P = 29.53059;
 // Calibrated so phase = 0.0 at New Moon: 2025-09-21 19:54 UTC
-static constexpr double C_NEW = 20.9190733334;
+static constexpr double C_NEW = 19.9190733334;
+
+struct UtcDateTime {
+  int year;
+  int month;
+  int day;
+  int hour;
+  int minute;
+  int second;
+};
 
 // ==== Externs (declared in main)
 extern Forecast_record_type   WxForecast[];   // from forecast_record.h
@@ -34,10 +43,12 @@ int tomorrowStartIndex(int preferHourStart);
 float mm_to_inches(float value_mm);
 float hPa_to_inHg(float value_hPa);
 int JulianDate(int d, int m, int y);
+UtcDateTime getUtcDateTime();
 float SumOfPrecip(float DataArray[], int readings);
 String TitleCase(String text);
-double NormalizedMoonPhase(int d, int m, int y, int hh = 12);
-String MoonPhase(int d, int m, int y);
+double NormalizedMoonPhase(int d, int m, int y, int h = 12);
+String MoonPhase(int d, int m, int y, int h = 12);
+int MoonIllumination(int d, int m, int y, int h = 12);
 String WindDegToDirection(float winddirection);
 
 #endif // COMMON_H_

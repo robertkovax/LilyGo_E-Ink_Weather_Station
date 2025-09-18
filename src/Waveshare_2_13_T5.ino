@@ -297,17 +297,9 @@ void DisplayAstronomySection(int x, int y) {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNRISE, LEFT);
   drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNSET, LEFT);
-  time_t now = time(NULL);
-  struct tm * now_utc = gmtime(&now);
-  const int hour_utc  = now_utc->tm_hour;
-  const int day_utc   = now_utc->tm_mday;
-  const int month_utc = now_utc->tm_mon + 1;
-  const int year_utc  = now_utc->tm_year + 1900;
-  int moonPercentage = NormalizedMoonPhase(day_utc, month_utc, year_utc, hour_utc) * 100;
-  if (moonPercentage <= 50) moonPercentage = moonPercentage * 2;
-  if (moonPercentage > 50) moonPercentage = (100 - moonPercentage) * 2;
-  drawString(x, y + 33, MoonPhase(day_utc, month_utc, year_utc) + " " + moonPercentage + "%", LEFT);
-  DrawMoon(x+62, y-15, day_utc, month_utc, year_utc);
+  UtcDateTime utc = getUtcDateTime();
+  drawString(x, y + 33, MoonPhase(utc.day, utc.month, utc.year) + " " + MoonIllumination(utc.day, utc.month, utc.year, utc.hour) + "%", LEFT);
+  DrawMoon(x+62, y-15, utc.day, utc.month, utc.year);
 }
 //#########################################################################################
 void DisplayWXicon(int x, int y, String IconName, bool IconSize) {

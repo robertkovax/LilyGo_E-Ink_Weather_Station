@@ -246,14 +246,27 @@ int JulianDate(int d, int m, int y) {
   if (j > 2299160) j = j - k3; // 'j' is the Julian date at 12h UT (Universal Time) For Gregorian calendar:
   return j;
 }
+//#########################################################################################
+UtcDateTime getUtcDateTime() {
+  time_t now = time(NULL);
+  struct tm * now_utc = gmtime(&now);
 
+  UtcDateTime dt;
+  dt.year   = now_utc->tm_year + 1900;
+  dt.month  = now_utc->tm_mon + 1;
+  dt.day    = now_utc->tm_mday;
+  dt.hour   = now_utc->tm_hour;
+  dt.minute = now_utc->tm_min;
+  dt.second = now_utc->tm_sec;
+  return dt;
+}
 //#########################################################################################
 
-double NormalizedMoonPhase(int d, int m, int y, int hh) {
+double NormalizedMoonPhase(int d, int m, int y, int h) {
   int jNoon = JulianDate(d, m, y);   // JDN at 12:00 UT
 
   // Fraction of a day relative to 12:00 UT
-  double fracDay = (hh - 12) / 24.0;
+  double fracDay = (h - 12) / 24.0;
   double J = jNoon + fracDay;
 
   // Normalize to [0,1)
@@ -262,11 +275,16 @@ double NormalizedMoonPhase(int d, int m, int y, int hh) {
 
   return phase;
 }
-
 //#########################################################################################
-String MoonPhase(int d, int m, int y) {
+int MoonIllumination(int d, int m, int y, int h){
+  double phase = NormalizedMoonPhase(d, m, y, h);
+  double illum = (1 - cos(2 * M_PI * phase)) / 2;   // 0.0..1.0
+  return (int)round(illum * 100);
+}
+//#########################################################################################
+String MoonPhase(int d, int m, int y, int h) {
   // Get fractional phase [0.0 .. 1.0)
-  double phase = NormalizedMoonPhase(d, m, y);
+  double phase = NormalizedMoonPhase(d, m, y, h);
 
   // Map to 0–7 (8 buckets)
   int b = (int)(phase * 8 + 0.5) & 7;
