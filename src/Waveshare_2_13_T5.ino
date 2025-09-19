@@ -28,7 +28,7 @@
 // + wifi webserver for full setup (press button while turning on, then connect to ssid: "weather_station_wifi", open: http://192.168.4.1)
 // + custom popup messages setup: http://192.168.4.1/popups
 // + display low battery warning and enables deep sleep to prevent depleeting the battery
-// + display error messages if wifi, weather server or time server fails
+// + display error messages if wifi, battery, weather server, or time server fail
 // + improved weather icons
 // + improved moon phase calculation
 // + fast screen update without full refresh every time
@@ -525,7 +525,6 @@ void connect2wifi(){
       drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
       display.display(false);
-      Serial.println("WiFi connection failed...");
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
@@ -533,7 +532,6 @@ void connect2wifi(){
     reconnect_cnt++;
     delay(1000);
   }
-  Serial.println("WiFi connected");
 }
 //#########################################################################################
 void StopWiFi() {
