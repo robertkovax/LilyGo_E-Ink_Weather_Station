@@ -25,7 +25,7 @@
 //**New functionality:**
 // + Cycle through "current day", "next day" and "4-day" forecast view on button press. 
 // + Long-press brings up the 4-day forecast right away. 
-// + update wifi credentials via wifi webserver (ssid: "weather_station_wifi", http://192.168.4.1)
+// + wifi webserver for full setup (press button while turning on, then connect to ssid: "weather_station_wifi", open: http://192.168.4.1)
 // + custom popup messages setup: http://192.168.4.1/popups
 // + display low battery warning and enables deep sleep to prevent depleeting the battery
 // + display error messages if wifi, weather server or time server fails
@@ -456,11 +456,14 @@ uint8_t StartWiFi(uint8_t *mac = nullptr) {
   Serial.println("\r\nConnecting to: " + String(ssid));
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
-  if (mac != nullptr && (mac[0] != 0 && mac[1] != 0 && mac[2] != 0 && mac[3] != 0 && mac[4] != 0 && mac[5] != 0)) {
+  esp_err_t err;
+  //all-zeros means skip custom MAC
+  if (mac != nullptr && !(mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) &&
+  !(mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF && mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF) && !(mac[0] & 0x01)) {
     esp_wifi_stop();
     Serial.printf("seting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
                   mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);        
-    esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, mac);
+    err = esp_wifi_set_mac(WIFI_IF_STA, mac);
     if (err != ESP_OK) {
       Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
     } else {
@@ -470,10 +473,10 @@ uint8_t StartWiFi(uint8_t *mac = nullptr) {
   // Verify MAC address
   uint8_t cur[6]; 
   esp_wifi_get_mac(WIFI_IF_STA, cur);
-  Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+  Serial.printf("Current MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
                  cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
 
-  esp_err_t err = esp_wifi_start();
+  err = esp_wifi_start();
   if (err != ESP_OK) {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
@@ -510,6 +513,7 @@ void connect2wifi(){
     // desiredMac now contains the six uint8_t values
   } else {
     memset(desiredMac, 0, sizeof(desiredMac));
+    Serial.println("using hardware MAC");
   }
   while (StartWiFi(desiredMac) != WL_CONNECTED) { 
     Serial.println("waiting for WiFi connection...");   
