@@ -504,8 +504,6 @@ uint8_t StartWiFi(uint8_t *mac = nullptr) {
 void connect2wifi(){
   byte reconnect_cnt = 0;
   uint8_t desiredMac[6] = {};
-  // char mac_buf[32] = {0};
-  // eeprom_read_string(MAC_ADDR, 32).toCharArray(mac_buf, sizeof(mac_buf));
   if (sscanf(MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
             &desiredMac[0], &desiredMac[1], &desiredMac[2],
             &desiredMac[3], &desiredMac[4], &desiredMac[5]) == 6) {
