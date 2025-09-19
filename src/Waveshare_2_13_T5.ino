@@ -25,18 +25,18 @@
 //**New functionality:**
 // + Cycle through "current day", "next day" and "4-day" forecast view on button press. 
 // + Long-press brings up the 4-day forecast right away. 
-// + update wifi credentials via wifi webserver "weather_station_wifi" http://192.168.4.1
-// + birthday greeting setup: http://192.168.4.1/popups
-// + improved weather icons
+// + update wifi credentials via wifi webserver (ssid: "weather_station_wifi", http://192.168.4.1)
+// + custom popup messages setup: http://192.168.4.1/popups
 // + display low battery warning and enables deep sleep to prevent depleeting the battery
-// + display wifi connection failure msg
-// + display weather server failure msg
-// + customized for Lilygo TTGO T5 V2.3_2.13 e-paper display
+// + display error messages if wifi, weather server or time server fails
+// + improved weather icons
+// + improved moon phase calculation
+// + fast screen update without full refresh every time
+// + this project is customized for Lilygo TTGO T5 V2.3_2.13 e-paper display
 
 
-//TO DO
-// improve find next day 
-// update to One Call API 3.0
+// TO DO:
+// Update weather fetching via One Call API 3.0
 
 
 #include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
@@ -374,7 +374,7 @@ void getTime(){
     Serial.println("waiting for timeserver...");   
     if(get_time_cnt > 3) {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("Timeserver connection failed..."), LEFT);
+      drawString(10, 20, String("Timeserver connection error..."), LEFT);
       drawString(10, 50, String("'") + ntpServer + String("'"),  LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update Settings:"),  LEFT);
@@ -451,56 +451,33 @@ float voltage = analogRead(35) / 4096.0 * 7.46;
     }
   }
 }
-// ##########################################################################################
-void connect2wifi(){
-  byte reconnect_cnt = 0;
-  uint8_t desiredMac[6] = {0x96,0xe1,0x33,0xe9,0x02,0xf4};
-  //uint8_t desiredMac[6] = {0x00,0x00,0x00,0x00,0x00,0x00}; //0x00 = will be ignored
-  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
-    Serial.println("waiting for WiFi connection...");   
-    if(reconnect_cnt > 1) {
-      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("WiFi connection failed... "), LEFT);
-      drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
-      display.display(false);
-      Serial.println("WiFi connection failed...");
-      buttonWake_cnt = -1;
-      delay(500);
-      BeginSleep(SleepDuration);
-    }  
-    reconnect_cnt++;
-    delay(1000);
-  }
-  Serial.println("WiFi connected");
-}
 //#########################################################################################
-uint8_t StartWiFi(uint8_t mac[6]) {
-  Serial.print("\r\nConnecting to: "); Serial.println(String(ssid));
-  IPAddress dns(8, 8, 8, 8); // Google DNS
+uint8_t StartWiFi(uint8_t *mac = nullptr) {
+  Serial.println("\r\nConnecting to: " + String(ssid));
   WiFi.persistent(false);
-  WiFi.mode(WIFI_MODE_STA);
-  if (mac[0] != 0x00 && mac[5] != 0x00){
-    esp_wifi_stop();         
+  WiFi.mode(WIFI_STA);
+  if (mac != nullptr && (mac[0] != 0 && mac[1] != 0 && mac[2] != 0 && mac[3] != 0 && mac[4] != 0 && mac[5] != 0)) {
+    esp_wifi_stop();
+    Serial.printf("seting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);        
     esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, mac);
     if (err != ESP_OK) {
       Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
     } else {
-      Serial.printf("STA MAC set to: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                  mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+      Serial.println("Set MAC success!");
     }
   }
+  // Verify MAC address
+  uint8_t cur[6]; 
+  esp_wifi_get_mac(WIFI_IF_STA, cur);
+  Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                 cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
+
   esp_err_t err = esp_wifi_start();
   if (err != ESP_OK) {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
-  //Verify MAC
-  // uint8_t cur[6]; 
-  // esp_wifi_get_mac(WIFI_IF_STA, cur);
-  // Serial.printf("Current STA MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-  //               cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
+            
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   unsigned long start = millis();
@@ -518,10 +495,43 @@ uint8_t StartWiFi(uint8_t mac[6]) {
   }
   if (connectionStatus == WL_CONNECTED) {
     wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
-    Serial.println("WiFi connected at: " + WiFi.localIP().toString());
+    Serial.println("WiFi connected to: " + WiFi.localIP().toString());
   }
   else Serial.println("WiFi connection *** FAILED ***");
   return connectionStatus;
+}
+// ##########################################################################################
+void connect2wifi(){
+  byte reconnect_cnt = 0;
+  uint8_t desiredMac[6] = {};
+  // char mac_buf[32] = {0};
+  // eeprom_read_string(MAC_ADDR, 32).toCharArray(mac_buf, sizeof(mac_buf));
+  if (sscanf(MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+            &desiredMac[0], &desiredMac[1], &desiredMac[2],
+            &desiredMac[3], &desiredMac[4], &desiredMac[5]) == 6) {
+    // desiredMac now contains the six uint8_t values
+  } else {
+    memset(desiredMac, 0, sizeof(desiredMac));
+  }
+  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
+    Serial.println("waiting for WiFi connection...");   
+    if(reconnect_cnt > 1) {
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("WiFi connection error... "), LEFT);
+      drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      display.display(false);
+      Serial.println("WiFi connection failed...");
+      buttonWake_cnt = -1;
+      delay(500);
+      BeginSleep(SleepDuration);
+    }  
+    reconnect_cnt++;
+    delay(1000);
+  }
+  Serial.println("WiFi connected");
 }
 //#########################################################################################
 void StopWiFi() {

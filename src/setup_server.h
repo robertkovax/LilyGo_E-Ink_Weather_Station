@@ -8,6 +8,7 @@ extern char weatherServer[];
 
 extern char ssid[64];
 extern char password[64];
+extern char MAC[32];
 extern char apikey[64];
 extern char LAT[32];
 extern char LON[32];
@@ -26,6 +27,7 @@ extern int daylightOffset_hour;
 #define LAT_ADDR    192
 #define LON_ADDR    224
 #define LOCATION_ADDR   256
+#define MAC_ADDR 288
 #define UNITS_ADDR 384
 #define TIMEZONE_ADDR 416
 #define GMTOFFSET_ADDR 480

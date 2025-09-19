@@ -10,6 +10,7 @@
 #include "setup_server.h"
 #include <EEPROM.h>
 #include <WiFi.h>
+#include "esp_wifi.h"
 #include <WebServer.h>
 
 WebServer wifiServer(80);
@@ -33,6 +34,7 @@ char weatherServer[] = "api.openweathermap.org";
 //wifi credentials
 char ssid[64]     = "";
 char password[64] = "";
+char MAC[32] = "";
 // API Key
 char apikey[64]       = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
 // Location data
@@ -65,10 +67,19 @@ String eeprom_read_string(int addr, int maxlen) {
 // Load config from EEPROM or owm_credentials.h
 void load_config() {
   EEPROM.begin(EEPROM_SIZE);
+
+  // if EEPROM empty => initialize from program variables
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized) {
-    erase_eeprom(EEPROM_SIZE, 0x00); 
-    // EEPROM empty, load from program variables
+    erase_eeprom(EEPROM_SIZE, 0x00); // first fill with 00
+      // get hardware MAC address as default
+    uint8_t mac[6]; 
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    char mac_str[18];  // "AA:BB:CC:DD:EE:FF" + null
+    snprintf(mac_str, sizeof(mac_str),
+            "%02X:%02X:%02X:%02X:%02X:%02X",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    eeprom_write_string(MAC_ADDR, String(mac_str), 32);
     eeprom_write_string(SSID_ADDR, String(::ssid), 64);
     eeprom_write_string(PASS_ADDR, String(::password), 64);
     eeprom_write_string(APIKEY_ADDR, String(::apikey), 64);
@@ -93,26 +104,27 @@ void load_config() {
     EEPROM.commit();
   }
   // Load all config from EEPROM
+  String mac_str = eeprom_read_string(MAC_ADDR, 32);
+  mac_str.toCharArray(MAC, sizeof(MAC));
   String ssid_str = eeprom_read_string(SSID_ADDR, 64);
+  ssid_str.toCharArray(ssid, sizeof(ssid));
   String pass_str = eeprom_read_string(PASS_ADDR, 64);
+  pass_str.toCharArray(password, sizeof(password));
   String apikey_str = eeprom_read_string(APIKEY_ADDR, 64);
+  apikey_str.toCharArray(apikey, sizeof(apikey));
   String lat_str = eeprom_read_string(LAT_ADDR, 32);
+  lat_str.toCharArray(LAT, sizeof(LAT));
   String lon_str = eeprom_read_string(LON_ADDR, 32);
+  lon_str.toCharArray(LON, sizeof(LON));
   String location_str = eeprom_read_string(LOCATION_ADDR, 32);
+  location_str.toCharArray(Location_name, sizeof(Location_name));
   String units_str = eeprom_read_string(UNITS_ADDR, 8);
+  units_str.toCharArray(Units, sizeof(Units));
   String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
+  timezone_str.toCharArray(Timezone, sizeof(Timezone));
   gmtOffset_hour = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24);
   daylightOffset_hour = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24);
   SleepDurationPreset = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24);
-  ssid_str.toCharArray(ssid, sizeof(ssid));
-  pass_str.toCharArray(password, sizeof(password));
-  apikey_str.toCharArray(apikey, sizeof(apikey));
-  lat_str.toCharArray(LAT, sizeof(LAT));
-  lon_str.toCharArray(LON, sizeof(LON));
-  location_str.toCharArray(Location_name, sizeof(Location_name));
-  units_str.toCharArray(Units, sizeof(Units));
-  timezone_str.toCharArray(Timezone, sizeof(Timezone));
-  Serial.println(Units);
 }
 
 // Helper to get current config value for HTML
@@ -347,12 +359,14 @@ void handle_popups_root() {
 
 void handle_wifi_root() {
   String form = "";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi settings</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi</legend>";
   String ssid_val = eeprom_read_string(SSID_ADDR, 64);
+  String mac_str = eeprom_read_string(MAC_ADDR, 32);
   form += html_input("ssid", ssid_val, false, nullptr, nullptr);
   form += html_input("pass", "", true, nullptr, nullptr);
+  form += html_input("MAC address", mac_str, false, "device MAC address", "e.g. 96:e1:33:e9:02:f4, default = hardware MAC (empty = default)");
   form += "</fieldset>";
-  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Geo settings</legend>";
+  form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Location</legend>";
   String lat_val = eeprom_read_string(LAT_ADDR, 32);
   String lon_val = eeprom_read_string(LON_ADDR, 32);
   String location_val = eeprom_read_string(LOCATION_ADDR, 32);
@@ -361,16 +375,16 @@ void handle_wifi_root() {
   String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR+1)<<8) | (EEPROM.read(GMTOFFSET_ADDR+2)<<16) | (EEPROM.read(GMTOFFSET_ADDR+3)<<24));
   String daylight_val = String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR+1)<<8) | (EEPROM.read(DAYLIGHT_ADDR+2)<<16) | (EEPROM.read(DAYLIGHT_ADDR+3)<<24));
   String sleepduration_val = String(EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR+1)<<8) | (EEPROM.read(SLEEPDURATION_ADDR+2)<<16) | (EEPROM.read(SLEEPDURATION_ADDR+3)<<24));
-  form += html_input("lat", lat_val, false, nullptr, nullptr);
-  form += html_input("lon", lon_val, false, nullptr, nullptr);
-  form += html_input("location", location_val, false, "location", "name of the place to display");
+  form += html_input("lat", lat_val, false, "LAT", nullptr);
+  form += html_input("lon", lon_val, false, "LON", nullptr);
+  form += html_input("location", location_val, false, "location name", " the name of the place to display");
   form += html_input("units", units_val, false, nullptr, "M - metric (Celsius), I - imperial (Fahrenheit)");
   form += html_input("timezone", timezone_val, false, "time zone", "see: <a href='https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv' target='_blank'>https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv</a>");
   form += html_input("gmtoffset", gmtoffset_val, false, "GMT offset [h]", "(e.g. -8 for GMT-8)");
   form += html_input("daylight", daylight_val, false, "daylight saving offset [h]", "(e.g. 1 for 1 hour, 0 if not used)");
    form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Refresh period</legend>";
-  form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 30 min)");
+  form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 60 min)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>OpenWeatherMap API</legend>";
   String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
@@ -403,6 +417,10 @@ void handle_wifi_save() {
     if (field == "pass" && wifiServer.hasArg("pass")) {
       Serial.println("Saving password: " + wifiServer.arg("pass"));
       eeprom_write_string(PASS_ADDR, wifiServer.arg("pass"), 64);
+    }
+    if (field == "MAC address" && wifiServer.hasArg("MAC address")) {
+      Serial.println("Saving MAC: " + wifiServer.arg("MAC address"));
+      eeprom_write_string(MAC_ADDR, wifiServer.arg("MAC address"), 64);
     }
     if (field == "apikey" && wifiServer.hasArg("apikey")) {
       Serial.println("Saving API key: " + wifiServer.arg("apikey"));
@@ -477,10 +495,10 @@ void handle_wifi_save() {
 
 void handle_erase_eeprom() {
   for (int i = 0; i < EEPROM_SIZE; i++) {
-    EEPROM.write(i, 0xFF);
+    EEPROM.write(i, 0x00);
   }
   EEPROM.commit();
-  wifiServer.send(200, "text/html", "<h2>EEPROM filled with 0xFF. Please reboot the device.</h2>");
+  wifiServer.send(200, "text/html", "<h2>EEPROM filled with 0x00. Please reboot the device.</h2>");
 }
 
 void erase_eeprom(int eeprom_size, byte erase_value){
