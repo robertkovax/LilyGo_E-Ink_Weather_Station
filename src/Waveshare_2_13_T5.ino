@@ -18,13 +18,12 @@
   See more at http://www.dsbird.org.uk
 */
 
-
-//modified by: Robert Kovacs, 2025, info@robertkovacs.de, https://robertkovax.com/
-//cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
+// modified by: Robert Kovacs, 2025, info@robertkovacs.de, https://robertkovax.com/
+// cloned from: https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
 
 //**New functionality:**
-// + Cycle through "current day", "next day" and "4-day" forecast view on button press. 
-// + Long-press brings up the 4-day forecast right away. 
+// + Cycle through "current day", "next day" and "4-day" forecast view on button press.
+// + Long-press brings up the 4-day forecast right away.
 // + wifi webserver for full setup (press button while turning on, then connect to ssid: "weather_station_wifi", open: http://192.168.4.1)
 // + custom popup messages setup: http://192.168.4.1/popups
 // + display low battery warning and enables deep sleep to prevent depleeting the battery
@@ -34,84 +33,85 @@
 // + fast screen update without full refresh every time
 // + this project is customized for Lilygo TTGO T5 V2.3_2.13 e-paper display
 
-
 // TO DO:
 // Update weather fetching via One Call API 3.0
 
-
-#include <ArduinoJson.h>     // https://github.com/bblanchon/ArduinoJson
-#include <WiFi.h>            // Built-in
+#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
+#include <WiFi.h>        // Built-in
 #include "esp_wifi.h"
 #include "time.h"
 #include <SPI.h>
-#define  ENABLE_GxEPD2_display 0
-//#include "forecast_record.h"
-//#include "owm_credentials.h"
+#define ENABLE_GxEPD2_display 0
+// #include "forecast_record.h"
+// #include "owm_credentials.h"
 #include "display.h"
 #include "setup_server.h"
 #include "common.h"
- 
+
 // ################ DISPLAY Lilygo TTGO T5 V2.3_2.13 #######################################
 // https://github.com/lewisxhe/TTGO-EPaper-Series#board-pins
-#define SCREEN_WIDTH   250
-#define SCREEN_HEIGHT  122
+#define SCREEN_WIDTH 250
+#define SCREEN_HEIGHT 122
 
 static const uint8_t EPD_BUSY = 4;
-static const uint8_t EPD_CS   = 5;
-static const uint8_t EPD_RST  = 16; 
-static const uint8_t EPD_DC   = 17; //Data/Command
-static const uint8_t EPD_SCK  = 18;   //CLK on pinout?
+static const uint8_t EPD_CS = 5;
+static const uint8_t EPD_RST = 16;
+static const uint8_t EPD_DC = 17;   // Data/Command
+static const uint8_t EPD_SCK = 18;  // CLK on pinout?
 static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
 static const uint8_t EPD_MOSI = 23;
 
 GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-//GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-// #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
-U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;  // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+// GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
 
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
 
-//################ TIME VARIABLES ##########################################################
-String  time_str, date_str, date_dd_mm_str; // strings to hold time and date
-int     wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
-long    StartTime = 0;
+// ################ TIME VARIABLES ##########################################################
+String time_str, date_str, date_dd_mm_str; // strings to hold time and date
+int wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
+long StartTime = 0;
 
-typedef struct { // For current Day and Day 1, 2, 3, etc
+typedef struct
+{ // For current Day and Day 1, 2, 3, etc
   String Time;
-  float  High;
-  float  Low;
+  float High;
+  float Low;
 } HL_record_type;
 
-//################ PROGRAM VARIABLES and OBJECTS ##########################################
+// ################ PROGRAM VARIABLES and OBJECTS ##########################################
 #define max_readings 40
 uint8_t MaxReadings = max_readings;
-float pressure_readings[max_readings]    = {0};
+float pressure_readings[max_readings] = {0};
 float temperature_readings[max_readings] = {0};
-float humidity_readings[max_readings]    = {0};
-float rain_readings[max_readings]        = {0};
-float snow_readings[max_readings]        = {0};
-Forecast_record_type  WxConditions[1];
-Forecast_record_type  WxForecast[max_readings];
-HL_record_type  HLReadings[max_readings];
+float humidity_readings[max_readings] = {0};
+float rain_readings[max_readings] = {0};
+float snow_readings[max_readings] = {0};
+Forecast_record_type WxConditions[1];
+Forecast_record_type WxForecast[max_readings];
+HL_record_type HLReadings[max_readings];
 
 // Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
 int SleepDurationPreset = 60; // default, it will be overwritten in load_config() from EEPROM;
 int SleepDuration;
-int  SleepTime     = 23; // Sleep after (23+1) 00:00 to save battery power
-int  WakeupTime    = 0;  // Don't wakeup until after 07:00 to save battery power
+int SleepTime = 23; // Sleep after (23+1) 00:00 to save battery power
+int WakeupTime = 0; // Don't wakeup until after 07:00 to save battery power
 
-//############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
+// ############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
 #define BUTTON_PIN 39
-//#define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
+// #define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
 RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
 RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
-void IRAM_ATTR handleButtonInterrupt() {
+void IRAM_ATTR handleButtonInterrupt()
+{
 }
 
-//############### PROGRAM ##########################################################################
-void setup() {
+// ####################################### PROGRAM ##############################################
+void setup()
+{
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
   StartTime = millis();
@@ -121,72 +121,78 @@ void setup() {
   load_config();
   SleepDuration = SleepDurationPreset;
 
-  //button update logic
+  // button update logic
   Serial.print("Wakeup cause: ");
-  switch(esp_sleep_get_wakeup_cause()){
-    case 0: // show first screen
-      Serial.println("Power on / reset");
-      buttonWake_cnt = 0;
-      break;
-    case 2: //cycle through the three screens
-      Serial.println("External interrupt (button press)");
-      buttonWake_cnt++;
-      break;
-    case 4: // show first screen
-      Serial.println("Timer wakeup");
-      buttonWake_cnt = 0; 
-      break;
+  switch (esp_sleep_get_wakeup_cause())
+  {
+  case 0: // show main weather section
+    Serial.println("Power on / reset");
+    buttonWake_cnt = 0;
+    break;
+  case 2: // button press - cycle through weather forecast screens
+    Serial.println("External interrupt (button press)");
+    buttonWake_cnt++;
+    break;
+  case 4: // timer wakeup - actualize main weather section
+    Serial.println("Timer wakeup");
+    buttonWake_cnt = 0;
+    break;
   }
-  
-  // init display in a separate process to speed up boot
+
+  // init display in a separate process to speed up booting
   xTaskCreatePinnedToCore(
       DisplayInitTask, "DispInit",
-      4096,            // stack size; bump to 6144/8192 if needed
+      4096, // stack size; bump to 6144/8192 if needed
       NULL,
-      2,               // priority (lower than your time-critical tasks)
+      2, // priority (lower than your time-critical tasks)
       &dispInitTaskHandle,
-      1                // core 1
+      1 // core 1
   );
-  
-  //if any of these function can send the controller into deep sleep
+
+  // any of the following function may intrrupt normal startup, show a warning or splash screen and send the controller into deep sleep
   CheckBattAbovePercentage(10);
   isSetupMode();
   connect2wifi();
   getTime();
   check4popups();
- 
-  // content logic
-  if ((((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) || buttonWake_cnt <= 0 || buttonWake_cnt >= 3) && digitalRead(BUTTON_PIN)) 
-  || (( buttonWake_cnt == 3) && !digitalRead(BUTTON_PIN))) {
+#
+  // ################################# Display content logic ########################################
+  if (((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER ||
+        buttonWake_cnt <= 0 ||
+        buttonWake_cnt >= 3) &&
+       digitalRead(BUTTON_PIN)) ||
+      (buttonWake_cnt == 3 && !digitalRead(BUTTON_PIN)))
+  {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
     DisplayTodaysWeather();
-    if(esp_sleep_get_wakeup_cause() == 0 || esp_sleep_get_wakeup_cause() == 4)
-      display.display(false); //full refresh
+    if (esp_sleep_get_wakeup_cause() == 0 || esp_sleep_get_wakeup_cause() == 4)
+      display.display(false); // full refresh
     else
-      display.display(true); //partial update
+      display.display(true); // partial update
     display.powerOff();
-  }else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))  {
+  }
+  else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))
+  {
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
     ShowNextDayForecast();
-    display.display(true); //partial update
+    display.display(true); // partial update
     SleepDuration = 5;
     display.powerOff();
-  } else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))  { 
+  }
+  else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))
+  {
     buttonWake_cnt = 2;
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
     Show4DayForecast();
-    display.display(true); //partial update
+    display.display(true); // partial update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -194,149 +200,180 @@ void setup() {
   BeginSleep(SleepDuration);
 }
 
-//#########################################################################################
-void loop() {
+// #########################################################################################
+void loop()
+{
   // Nothing to do here, all work is done in setup()
   // The program will go into deep sleep after setup() is completed
   // and will wake up based on the button press or timer.
 }
-//#########################################################################################
-void DisplayTodaysWeather() {             // 2.13" e-paper display is 250x122 useable resolution
-  //Draw_Grid();
-  Draw_Heading_Section();           // Top line of the display
-  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon); //WxConditions[0].Icon
+// #########################################################################################
+void DisplayTodaysWeather()
+{ // 2.13" e-paper display is 250x122 useable resolution
+  // Draw_Grid();
+  Draw_Heading_Section();                                  // Top line of the display
+  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon); // WxConditions[0].Icon
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(0, 35, String(WxConditions[0].Temperature, 1) + "°", LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(45, 35, "/ " + String(WxConditions[0].Humidity, 0) + "%", LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK); //Draw width of the 5 weather forcasts
-  for (int i = 0; i <= 4; i++){
-    Draw_3hr_Forecast(i*43, 96, i);
+  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK); // Draw width of the 5 weather forcasts
+  for (int i = 0; i <= 4; i++)
+  {
+    Draw_3hr_Forecast(i * 43, 96, i);
   }
   DisplayAstronomySection(142, 18); // Astronomy section Sun rise/set and Moon phase plus icon
   DrawSmallWind(231, 75, WxConditions[0].Winddir, WxConditions[0].Windspeed);
   DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
 }
-//#########################################################################################
-void ShowNextDayForecast() {
-  Draw_Heading_Section(); 
+// #########################################################################################
+void ShowNextDayForecast()
+{
+  Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 36, "weather tomorrow:", LEFT);
   int startIndex = tomorrowStartIndex(6);
   Serial.println("Forecast for " + String(WxForecast[startIndex].Period) + ", " + String(WxForecast[startIndex].Temperature) + "C ," + "pos = " + startIndex);
-  for (int i = 0; i <= 4; i++){
-    Draw_Next_Day_3hr_Forecast(i*43, 96, startIndex + i);
+  for (int i = 0; i <= 4; i++)
+  {
+    Draw_Next_Day_3hr_Forecast(i * 43, 96, startIndex + i);
   }
-  display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK); //Draw width of the 5 weather forcasts
+  display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK); // Draw width of the 5 weather forcasts
   DrawSmallWind(231, 75, WxForecast[startIndex + 1].Winddir, WxForecast[startIndex + 1].Windspeed);
 }
-//#########################################################################################
-void Show4DayForecast() {
+// #########################################################################################
+void Show4DayForecast()
+{
   Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 33, "4-day forecast:", LEFT);
   int forecastStart = tomorrowStartIndex(8);
   int maxPos = 0, minPos = 0;
-  for (int DayIndex = 0; DayIndex < 4; DayIndex++) { //show 4 days
-    HLReadings[DayIndex].High  = WxForecast[forecastStart + (8 * DayIndex)].High; //init
-    HLReadings[DayIndex].Low  = WxForecast[forecastStart + (8 * DayIndex)].Low; //init
-    for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++) {
-      if (WxForecast[r].High >= HLReadings[DayIndex].High) {
+  for (int DayIndex = 0; DayIndex < 4; DayIndex++)
+  {                                                                              // show 4 days
+    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High; // init
+    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;   // init
+    for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++)
+    {
+      if (WxForecast[r].High >= HLReadings[DayIndex].High)
+      {
         HLReadings[DayIndex].High = WxForecast[r].High;
         maxPos = r;
       }
-      if (WxForecast[r].Low <= HLReadings[DayIndex].Low)  {
+      if (WxForecast[r].Low <= HLReadings[DayIndex].Low)
+      {
         HLReadings[DayIndex].Low = WxForecast[r].Low;
-        minPos = r; //not used
+        minPos = r; // not used
       }
     }
     Draw_4_Day_Forecast(28, 85, maxPos, DayIndex, 57); // x,y coordinates, forecast number, position, spacing width
     Serial.println("Day " + String(DayIndex) + ": Max = " + String(HLReadings[DayIndex].High) + " Min = " + String(HLReadings[DayIndex].Low));
   }
 }
-//#########################################################################################
-void Draw_Heading_Section() {
+// #########################################################################################
+void Draw_Heading_Section()
+{
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(0, 1, Location_name, LEFT);
-  //drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
+  // drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
   drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str, RIGHT); //+ " " + time_str
   DrawBattery(80, 12);
   display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
 }
-//#########################################################################################
-void Draw_3hr_Forecast(int x, int y, int index) {
-  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); //WxForecast[index].Icon
+// #########################################################################################
+void Draw_3hr_Forecast(int x, int y, int index)
+{
+  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); // WxForecast[index].Icon
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x + 7, y - 21, WxForecast[index].Period.substring(11, 16), LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 13, y + 18, String(WxForecast[index].Temperature, 0) + "°", LEFT);
-  display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52 , GxEPD_BLACK);
-  display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52 , GxEPD_BLACK);
+  display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52, GxEPD_BLACK);
+  display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52, GxEPD_BLACK);
 }
-//#########################################################################################
-void Draw_Next_Day_3hr_Forecast(int x, int y, int index) {
+// #########################################################################################
+void Draw_Next_Day_3hr_Forecast(int x, int y, int index)
+{
   DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   drawString(x + 4, y - 25, WxForecast[index].Period.substring(11, 16), LEFT);
   drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT);
-  display.drawLine(x + 44, y - 32, x + 44, y - 32 + 57 , GxEPD_BLACK);
+  display.drawLine(x + 44, y - 32, x + 44, y - 32 + 57, GxEPD_BLACK);
 }
-//######################################################################################### 
-void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth) {
+// #########################################################################################
+void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth)
+{
   x += fwidth * Dposition;
-  DisplayWXicon(x + 10, y + 5, WxForecast[forecast].Icon, SmallIcon); 
+  DisplayWXicon(x + 10, y + 5, WxForecast[forecast].Icon, SmallIcon);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   String ForecastDay = GetForecastDay(WxForecast[forecast].Dt);
   drawString(x + 8, y - 22, ForecastDay, CENTER);
   drawString(x + 16, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
   display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
 }
-//#########################################################################################
-void DisplayAstronomySection(int x, int y) {
+// #########################################################################################
+void DisplayAstronomySection(int x, int y)
+{
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x, y, ConvertUnixTime(WxConditions[0].Sunrise + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNRISE, LEFT);
   drawString(x, y + 16, ConvertUnixTime(WxConditions[0].Sunset + WxConditions[0].Timezone).substring(0, 5) + " " + TXT_SUNSET, LEFT);
   UtcDateTime utc = getUtcDateTime();
   drawString(x, y + 33, MoonPhase(utc.day, utc.month, utc.year) + " " + MoonIllumination(utc.day, utc.month, utc.year, utc.hour) + "%", LEFT);
-  DrawMoon(x+62, y-15, utc.day, utc.month, utc.year);
+  DrawMoon(x + 62, y - 15, utc.day, utc.month, utc.year);
 }
-//#########################################################################################
-void DisplayWXicon(int x, int y, String IconName, bool IconSize) {
-  //Serial.println("Icon name: " + IconName);
-  if      (IconName == "01d" || IconName == "01n")  Sunny(x, y, IconSize, IconName);        //Serial.println("Sunny");}
-  else if (IconName == "02d" || IconName == "02n")  MostlySunny(x, y, IconSize, IconName);   //Serial.println("MostlySunny");}
-  else if (IconName == "03d" || IconName == "03n")  MostlyCloudy(x, y, IconSize, IconName);  //Serial.println("MostlyCloudy");}
-  else if (IconName == "04d" || IconName == "04n")  Cloudy(x, y, IconSize, IconName);        //Serial.println("Cloudy");}
-  else if (IconName == "09d" || IconName == "09n")  ChanceRain(x, y, IconSize, IconName);    //Serial.println("ChanceRain");}
-  else if (IconName == "10d" || IconName == "10n")  Rain(x, y, IconSize, IconName);          //Serial.println("Rain");}
-  else if (IconName == "11d" || IconName == "11n")  Tstorms(x, y, IconSize, IconName);       //Serial.println("Tstorms");}  
-  else if (IconName == "13d" || IconName == "13n")  Snow(x, y, IconSize, IconName);          //Serial.println("Snow");} 
-  else if (IconName == "50d" || IconName == "50n")  Fog(x, y, IconSize, IconName);           //Serial.println("Fog");}
-  else                                              Nodata(x, y, IconSize, IconName);        //Serial.println("Nodata");}
+// #########################################################################################
+void DisplayWXicon(int x, int y, String IconName, bool IconSize)
+{
+  // Serial.println("Icon name: " + IconName);
+  if (IconName == "01d" || IconName == "01n")
+    Sunny(x, y, IconSize, IconName); // Serial.println("Sunny");}
+  else if (IconName == "02d" || IconName == "02n")
+    MostlySunny(x, y, IconSize, IconName); // Serial.println("MostlySunny");}
+  else if (IconName == "03d" || IconName == "03n")
+    MostlyCloudy(x, y, IconSize, IconName); // Serial.println("MostlyCloudy");}
+  else if (IconName == "04d" || IconName == "04n")
+    Cloudy(x, y, IconSize, IconName); // Serial.println("Cloudy");}
+  else if (IconName == "09d" || IconName == "09n")
+    ChanceRain(x, y, IconSize, IconName); // Serial.println("ChanceRain");}
+  else if (IconName == "10d" || IconName == "10n")
+    Rain(x, y, IconSize, IconName); // Serial.println("Rain");}
+  else if (IconName == "11d" || IconName == "11n")
+    Tstorms(x, y, IconSize, IconName); // Serial.println("Tstorms");}
+  else if (IconName == "13d" || IconName == "13n")
+    Snow(x, y, IconSize, IconName); // Serial.println("Snow");}
+  else if (IconName == "50d" || IconName == "50n")
+    Fog(x, y, IconSize, IconName); // Serial.println("Fog");}
+  else
+    Nodata(x, y, IconSize, IconName); // Serial.println("Nodata");}
 }
-//#########################################################################################
-void get_weather_data(String type){
+// #########################################################################################
+void get_weather_data(String type)
+{
   byte get_weather_cnt = 0;
   bool receivedOk = false;
   WiFiClient client;
-  
-  while (receivedOk == false) {
-    if (receivedOk  == false && type == "current"){
-      Serial.println("waiting for current weather data..."); 
-      receivedOk  = obtain_wx_data(client, "weather");
-    } 
-    if (receivedOk == false && type == "forecast") {
-      Serial.println("waiting for forecast data..."); 
+
+  while (receivedOk == false)
+  {
+    if (receivedOk == false && type == "current")
+    {
+      Serial.println("waiting for current weather data...");
+      receivedOk = obtain_wx_data(client, "weather");
+    }
+    if (receivedOk == false && type == "forecast")
+    {
+      Serial.println("waiting for forecast data...");
       receivedOk = obtain_wx_data(client, "forecast");
-    }  
-    if(get_weather_cnt > 3 && (!receivedOk)) {
+    }
+    if (get_weather_cnt > 3 && (!receivedOk))
+    {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("Failed to get weather data..."), LEFT);
-      drawString(10, 40, String("'") + weatherServer + String("'"),  LEFT);
+      drawString(10, 40, String("'") + weatherServer + String("'"), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update Settings:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      drawString(10, 90, String("Update Settings:"), LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
       display.display(false);
       StopWiFi();
       buttonWake_cnt = -1;
@@ -350,11 +387,14 @@ void get_weather_data(String type){
   Serial.println("Weather data received");
 }
 // ##########################################################################################
-void isSetupMode(){
+void isSetupMode()
+{
   // Check for setup mode (button held at power-on)
-  if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) { // Power on reset
+  if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
+  { // Power on reset
     Serial.println("entering setup mode...");
-    while(!displayReady);
+    while (!displayReady)
+      ;
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
     drawString(10, 30, String("Setup mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -364,48 +404,57 @@ void isSetupMode(){
     display.display(false);
     run_wifi_setup_portal();
     // Will restart after setup
-    while (true) delay(1000);
+    while (true)
+      delay(1000);
   }
 }
 // ##########################################################################################
-void getTime(){
+void getTime()
+{
   byte get_time_cnt = 0;
-  while (SetupTime() != true) { 
-    Serial.println("waiting for timeserver...");   
-    if(get_time_cnt > 3) {
+  while (SetupTime() != true)
+  {
+    Serial.println("waiting for timeserver...");
+    if (get_time_cnt > 3)
+    {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("Timeserver connection error..."), LEFT);
-      drawString(10, 50, String("'") + ntpServer + String("'"),  LEFT);
+      drawString(10, 50, String("'") + ntpServer + String("'"), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update Settings:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      drawString(10, 90, String("Update Settings:"), LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
       display.display(false);
       Serial.println("Connecting to timeserver failed...");
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
-    }  
+    }
     get_time_cnt++;
     delay(500);
   }
 }
-//#########################################################################################
-void check4popups(){
+// #########################################################################################
+void check4popups()
+{
   const int popup_msg_addrs[4] = {POPUP1_MSG_ADDR, POPUP2_MSG_ADDR, POPUP3_MSG_ADDR, POPUP4_MSG_ADDR};
   const int popup_date_addrs[4] = {POPUP1_DATE_ADDR, POPUP2_DATE_ADDR, POPUP3_DATE_ADDR, POPUP4_DATE_ADDR};
   uint8_t popup_found = 255;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 4; i++)
+  {
     String popup_msg = eeprom_read_string(popup_msg_addrs[i], 48);
     String popup_date = eeprom_read_string(popup_date_addrs[i], 8);
-    //Serial.println("popup check: " + popup_msg + " - " + popup_date);
-    if (popup_date== String(date_dd_mm_str) && popup_msg.length() > 0) {
+    // Serial.println("popup check: " + popup_msg + " - " + popup_date);
+    if (popup_date == String(date_dd_mm_str) && popup_msg.length() > 0)
+    {
       popup_found = i;
-      if(popup_displayed != popup_found){
+      if (popup_displayed != popup_found)
+      {
         Serial.println("Today's popup: " + popup_msg);
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-        while(!displayReady);
+        while (!displayReady)
+          ;
         drawStringMaxWidth(10, 20, 170, popup_msg, LEFT);
-        Sunny(220, 35, Large, "01");         
+        Sunny(220, 35, Large, "01");
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
         drawString(10, 110, String("press Next to continue..."), LEFT);
         display.display(false);
@@ -417,26 +466,33 @@ void check4popups(){
       }
     }
   }
-  if (popup_found == 255) {
+  if (popup_found == 255)
+  {
     popup_displayed = 255;
     Serial.println("No popup msg today");
   }
 }
-//#########################################################################################
-void CheckBattAbovePercentage(byte check_percentage){
-uint8_t percentage = 100;
-float voltage = analogRead(35) / 4096.0 * 7.46;
-  if (voltage > 1 ) { // Only display if there is a valid reading
+// #########################################################################################
+void CheckBattAbovePercentage(byte check_percentage)
+{
+  uint8_t percentage = 100;
+  float voltage = analogRead(35) / 4096.0 * 7.46;
+  if (voltage > 1)
+  { // Only display if there is a valid reading
     percentage = 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
-    if (voltage >= 4.20) percentage = 100;
-    if (voltage <= 3.50) percentage = 0;
+    if (voltage >= 4.20)
+      percentage = 100;
+    if (voltage <= 3.50)
+      percentage = 0;
     Serial.println("Voltage = " + String(voltage));
-    if (percentage <= check_percentage) {
+    if (percentage <= check_percentage)
+    {
       Serial.println("critical battery level, please charge!");
       Serial.println("Battery too low, stopping");
-      while(!displayReady);
+      while (!displayReady)
+        ;
       u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-      drawString(10, 30, String("Critical battery level..."),  LEFT);
+      drawString(10, 30, String("Critical battery level..."), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB10_tf);
       drawString(10, 70, String("please recharge and reboot!"), LEFT);
       display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
@@ -451,104 +507,123 @@ float voltage = analogRead(35) / 4096.0 * 7.46;
     }
   }
 }
-//#########################################################################################
-uint8_t StartWiFi(uint8_t *mac = nullptr) {
+// #########################################################################################
+uint8_t StartWiFi(uint8_t *mac = nullptr)
+{
   Serial.println("\r\nConnecting to: " + String(ssid));
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   esp_err_t err;
-  //all-zeros means skip custom MAC
+  // all-zeros means skip custom MAC
   if (mac != nullptr && !(mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) &&
-  !(mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF && mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF) && !(mac[0] & 0x01)) {
+      !(mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF && mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF) && !(mac[0] & 0x01))
+  {
     esp_wifi_stop();
     Serial.printf("seting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                  mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);        
+                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     err = esp_wifi_set_mac(WIFI_IF_STA, mac);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
       Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
-    } else {
+    }
+    else
+    {
       Serial.println("Set MAC success!");
     }
   }
   // Verify MAC address
-  uint8_t cur[6]; 
+  uint8_t cur[6];
   esp_wifi_get_mac(WIFI_IF_STA, cur);
   Serial.printf("Current MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
-                 cur[0],cur[1],cur[2],cur[3],cur[4],cur[5]);
+                cur[0], cur[1], cur[2], cur[3], cur[4], cur[5]);
 
   err = esp_wifi_start();
-  if (err != ESP_OK) {
+  if (err != ESP_OK)
+  {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
-            
+
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   unsigned long start = millis();
   uint8_t connectionStatus;
   bool AttemptConnection = true;
-  while (AttemptConnection) {
+  while (AttemptConnection)
+  {
     connectionStatus = WiFi.status();
-    if (millis() > start + 15000) { // Wait 15-secs maximum
+    if (millis() > start + 15000)
+    { // Wait 15-secs maximum
       AttemptConnection = false;
     }
-    if (connectionStatus == WL_CONNECTED || connectionStatus == WL_CONNECT_FAILED) {
+    if (connectionStatus == WL_CONNECTED || connectionStatus == WL_CONNECT_FAILED)
+    {
       AttemptConnection = false;
     }
     delay(50);
   }
-  if (connectionStatus == WL_CONNECTED) {
+  if (connectionStatus == WL_CONNECTED)
+  {
     wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
     Serial.println("WiFi connected to: " + WiFi.localIP().toString());
   }
-  else Serial.println("WiFi connection *** FAILED ***");
+  else
+    Serial.println("WiFi connection *** FAILED ***");
   return connectionStatus;
 }
 // ##########################################################################################
-void connect2wifi(){
+void connect2wifi()
+{
   byte reconnect_cnt = 0;
   uint8_t desiredMac[6] = {};
   if (sscanf(MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-            &desiredMac[0], &desiredMac[1], &desiredMac[2],
-            &desiredMac[3], &desiredMac[4], &desiredMac[5]) == 6) {
+             &desiredMac[0], &desiredMac[1], &desiredMac[2],
+             &desiredMac[3], &desiredMac[4], &desiredMac[5]) == 6)
+  {
     // desiredMac now contains the six uint8_t values
-  } else {
+  }
+  else
+  {
     memset(desiredMac, 0, sizeof(desiredMac));
     Serial.println("using hardware MAC");
   }
-  while (StartWiFi(desiredMac) != WL_CONNECTED) { 
-    Serial.println("waiting for WiFi connection...");   
-    if(reconnect_cnt > 1) {
+  while (StartWiFi(desiredMac) != WL_CONNECTED)
+  {
+    Serial.println("waiting for WiFi connection...");
+    if (reconnect_cnt > 1)
+    {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("WiFi connection error... "), LEFT);
-      drawString(10, 50, String("ssid: '") + ssid + String("'"),  LEFT);
+      drawString(10, 50, String("ssid: '") + ssid + String("'"), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update WiFi credentials:"),  LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"),  LEFT);
+      drawString(10, 90, String("Update WiFi credentials:"), LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
       display.display(false);
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
-    }  
+    }
     reconnect_cnt++;
     delay(1000);
   }
 }
-//#########################################################################################
-void StopWiFi() {
+// #########################################################################################
+void StopWiFi()
+{
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 }
-//#########################################################################################
-void BeginSleep(long _sleepDuration) {
+// #########################################################################################
+void BeginSleep(long _sleepDuration)
+{
   display.powerOff();
   StopWiFi();
   // Enable wakeup by timer and by button (ext0)
   esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
-  if(_sleepDuration < 10)
+  if (_sleepDuration < 10)
     _sleepDuration = _sleepDuration * 60;
   else
-    _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); //Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((_sleepDuration+0) * 1000000LL); // Added 0-sec extra delay to cater for slow ESP32 RTC timers
+    _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); // Some ESP32 are too fast to maintain accurate time
+  esp_sleep_enable_timer_wakeup((_sleepDuration + 0) * 1000000LL);                              // Added 0-sec extra delay to cater for slow ESP32 RTC timers
 #ifdef BUILTIN_LED
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
@@ -556,11 +631,12 @@ void BeginSleep(long _sleepDuration) {
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
   Serial.println("Entering " + String(_sleepDuration) + "-secs of sleep");
   delay(1000);
-  esp_deep_sleep_start();  // Sleep for e.g. 30 minutes
+  esp_deep_sleep_start(); // Sleep for e.g. 30 minutes
 }
-//#########################################################################################
-void InitialiseDisplay() {
-  display.init(0, false, 20); //don't enforce full update at every cold start
+// #########################################################################################
+void InitialiseDisplay()
+{
+  display.init(0, false, 20); // don't enforce full update at every cold start
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
   // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
@@ -569,24 +645,28 @@ void InitialiseDisplay() {
   u8g2Fonts.setFontDirection(0);             // left to right (this is default)
   u8g2Fonts.setForegroundColor(GxEPD_BLACK); // apply Adafruit GFX color
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
-  //u8g2Fonts.setFont(u8g2_font_helvB10_tf);   
+  // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   display.setFullWindow();
-  if((esp_sleep_get_wakeup_cause() == 2 || esp_sleep_get_wakeup_cause() == 0) && (buttonWake_cnt <= 0 || buttonWake_cnt >= 3)){
+  if ((esp_sleep_get_wakeup_cause() == 2) && (buttonWake_cnt <= 0 || buttonWake_cnt >= 3))
+  { // do a bit more cleaning at every main screen
     display.fillScreen(GxEPD_BLACK);
     display.display(true);
     display.fillScreen(GxEPD_WHITE);
     display.display(true);
-  }else{
+  }
+  else
+  {
     display.fillScreen(GxEPD_WHITE);
     display.display(true);
   }
 }
-  
-//#########################################################################################
-void DisplayInitTask(void *pv) {
+
+// #########################################################################################
+void DisplayInitTask(void *pv)
+{
 
   InitialiseDisplay();
   Serial.println("Display init finished");
-  displayReady = true;           // signal “done”
-  vTaskDelete(NULL);             // kill this task
+  displayReady = true; // signal “done”
+  vTaskDelete(NULL);   // kill this task
 }

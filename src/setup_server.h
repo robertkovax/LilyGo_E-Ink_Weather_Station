@@ -21,12 +21,12 @@ extern int gmtOffset_hour;
 extern int daylightOffset_hour;
 
 #define EEPROM_SIZE 1024
-#define SSID_ADDR   0
-#define PASS_ADDR   64
+#define SSID_ADDR 0
+#define PASS_ADDR 64
 #define APIKEY_ADDR 128
-#define LAT_ADDR    192
-#define LON_ADDR    224
-#define LOCATION_ADDR   256
+#define LAT_ADDR 192
+#define LON_ADDR 224
+#define LOCATION_ADDR 256
 #define MAC_ADDR 288
 #define UNITS_ADDR 384
 #define TIMEZONE_ADDR 416
