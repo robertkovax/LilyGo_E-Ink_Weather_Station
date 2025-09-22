@@ -117,11 +117,12 @@ void setup()
   StartTime = millis();
   Serial.begin(115200);
   Serial.println("Weather station active!");
-  // Load WiFi credentials from EEPROM or defaults
+
+  // Load all saved settings from EEPROM or program defaults
   load_config();
-  SleepDuration = SleepDurationPreset;
 
   // button update logic
+  const auto wakeup_cause  = esp_sleep_get_wakeup_cause();
   Serial.print("Wakeup cause: ");
   switch (esp_sleep_get_wakeup_cause())
   {
@@ -157,42 +158,49 @@ void setup()
   check4popups();
 #
   // ################################# Display content logic ########################################
-  if (((esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER ||
+  // advance screen on every button press
+  // on long press go to 4 day forecast immediately
+  const bool btnPressed    = !digitalRead(BUTTON_PIN);
+  if (((wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
         buttonWake_cnt <= 0 ||
         buttonWake_cnt >= 3) &&
-       digitalRead(BUTTON_PIN)) ||
-      (buttonWake_cnt == 3 && !digitalRead(BUTTON_PIN)))
+       !btnPressed) ||
+      (buttonWake_cnt == 3 && btnPressed))
   {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
-    DisplayTodaysWeather();
-    if (esp_sleep_get_wakeup_cause() == 0 || esp_sleep_get_wakeup_cause() == 4)
+    if (displayReady)
+      DisplayTodaysWeather();
+    if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
       display.display(false); // full refresh
     else
-      display.display(true); // partial update
+      display.display(true); // partial fast update
+    SleepDuration = SleepDurationPreset;
     display.powerOff();
   }
-  else if (buttonWake_cnt == 1 && digitalRead(BUTTON_PIN))
+  else if (buttonWake_cnt == 1 && !btnPressed)
   {
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
-    ShowNextDayForecast();
-    display.display(true); // partial update
+    if (displayReady)
+      ShowNextDayForecast();
+    display.display(true); // partial fast update
     SleepDuration = 5;
     display.powerOff();
   }
-  else if (buttonWake_cnt == 2 || !digitalRead(BUTTON_PIN))
+  else if (buttonWake_cnt == ESP_SLEEP_WAKEUP_EXT0 || btnPressed)
   {
     buttonWake_cnt = 2;
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
-    Show4DayForecast();
-    display.display(true); // partial update
+    if (displayReady)
+      Show4DayForecast();
+    display.display(true); // partial fast update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -647,18 +655,8 @@ void InitialiseDisplay()
   u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
   // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   display.setFullWindow();
-  if ((esp_sleep_get_wakeup_cause() == 2) && (buttonWake_cnt <= 0 || buttonWake_cnt >= 3))
-  { // do a bit more cleaning at every main screen
-    display.fillScreen(GxEPD_BLACK);
-    display.display(true);
-    display.fillScreen(GxEPD_WHITE);
-    display.display(true);
-  }
-  else
-  {
-    display.fillScreen(GxEPD_WHITE);
-    display.display(true);
-  }
+  display.fillScreen(GxEPD_WHITE);
+  display.display(true); //fast fill
 }
 
 // #########################################################################################
