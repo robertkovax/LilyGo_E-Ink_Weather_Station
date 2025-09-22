@@ -62,7 +62,7 @@ static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data 
 static const uint8_t EPD_MOSI = 23;
 
 GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-// GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 //  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
@@ -120,6 +120,7 @@ void setup()
 
   // Load all saved settings from EEPROM or program defaults
   load_config();
+  SleepDuration = SleepDurationPreset;
 
   // button update logic
   const auto wakeup_cause  = esp_sleep_get_wakeup_cause();
@@ -172,12 +173,12 @@ void setup()
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
-    if (displayReady)
+    while (!displayReady);
       DisplayTodaysWeather();
     if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
       display.display(false); // full refresh
     else
-      display.display(true); // partial fast update
+      display.display(false); // partial fast update
     SleepDuration = SleepDurationPreset;
     display.powerOff();
   }
@@ -186,9 +187,9 @@ void setup()
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
-    if (displayReady)
-      ShowNextDayForecast();
-    display.display(true); // partial fast update
+    while (!displayReady);
+    ShowNextDayForecast();
+    display.display(false); // partial fast update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -198,9 +199,9 @@ void setup()
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
-    if (displayReady)
-      Show4DayForecast();
-    display.display(true); // partial fast update
+    while (!displayReady);
+    Show4DayForecast();
+    display.display(false); // partial fast update
     SleepDuration = 5;
     display.powerOff();
   }
@@ -559,7 +560,7 @@ uint8_t StartWiFi(uint8_t *mac = nullptr)
   while (AttemptConnection)
   {
     connectionStatus = WiFi.status();
-    if (millis() > start + 15000)
+    if (millis() > start + 10000)
     { // Wait 15-secs maximum
       AttemptConnection = false;
     }
@@ -644,7 +645,7 @@ void BeginSleep(long _sleepDuration)
 // #########################################################################################
 void InitialiseDisplay()
 {
-  display.init(0, false, 20); // don't enforce full update at every cold start
+  display.init(0, true, 20); // don't enforce full update at every cold start
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
   // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
