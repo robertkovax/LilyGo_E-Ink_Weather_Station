@@ -550,17 +550,18 @@ void erase_eeprom(int eeprom_size, byte erase_value)
   EEPROM.commit();
 }
 // #########################################################################################
-void run_wifi_setup_portal(unsigned long timeoutMinutes) {
+void run_wifi_setup_portal(uint32_t timeoutMinutes) {
   WiFi.mode(WIFI_AP);
   WiFi.softAP("weather_station_wifi");
   delay(300);
 
-  unsigned long lastActivityMs = millis();
+  const uint32_t timeoutMs = timeoutMinutes * 60000UL; // minutes → ms safely
+  // Helper: extend deadline on any activity
+  auto nowMs    = []() -> uint32_t { return millis(); };
+  uint32_t deadline = nowMs() + timeoutMs;
+  auto touch = [&]() { deadline = nowMs() + timeoutMs; };
 
-  // Shortcut lambda to bump activity
-  auto touch = [&]() { lastActivityMs = millis(); };
-
-  // Wrap handlers so they update activity
+  // Touch on every handler
   wifiServer.on("/", HTTP_GET,         [&](){ touch(); handle_wifi_root(); });
   wifiServer.on("/save", HTTP_POST,    [&](){ touch(); handle_wifi_save(); });
   wifiServer.on("/reboot", HTTP_POST,  [&](){ touch(); handle_wifi_reboot(); });
@@ -570,37 +571,36 @@ void run_wifi_setup_portal(unsigned long timeoutMinutes) {
   wifiServer.onNotFound([&](){ touch(); wifiServer.send(404, "text/plain", "Not found"); });
 
   wifiServer.begin();
-  Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");
+  Serial.printf("Portal up. Timeout: %lu min (%lu ms)\n", (unsigned long)timeoutMinutes, (unsigned long)timeoutMs);
 
-  const unsigned long timeoutMs = timeoutMinutes * 60UL * 1000UL;
-  unsigned long lastAssocCheck = 0;
+  uint32_t lastAssocCheck = 0;
 
   for (;;) {
     wifiServer.handleClient();
 
-    unsigned long now = millis();
+    uint32_t now = nowMs();
 
-    // Update activity if any station is associated
-    if (now - lastAssocCheck >= 250) {
+    // Treat association as "activity" (checked ~4×/s)
+    if ((uint32_t)(now - lastAssocCheck) >= 250UL) {
       lastAssocCheck = now;
       if (WiFi.softAPgetStationNum() > 0) {
-        touch();
+        touch(); // keep alive while a station is associated
       }
     }
 
-    // Timeout check
-    if (now - lastActivityMs >= timeoutMs) {
-      Serial.printf("%lu-minute timeout reached. Closing portal.\n", timeoutMinutes);
+    // Deadline reached? Use signed diff to handle wraparound safely.
+    if ((int32_t)(now - deadline) >= 0) {
+      Serial.printf("%lu-minute timeout reached. Closing portal.\n", (unsigned long)timeoutMinutes);
       break;
     }
 
-    delay(10); // yield and keep loop responsive
+    delay(10); // yield to WiFi/RTOS; keeps HTTP snappy
   }
+
   wifiServer.stop();
   WiFi.softAPdisconnect(true);
   WiFi.mode(WIFI_OFF);
 }
-
 
 
 // #########################################################################################

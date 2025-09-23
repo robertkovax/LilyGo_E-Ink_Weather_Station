@@ -61,9 +61,9 @@ static const uint8_t EPD_SCK = 18;  // CLK on pinout?
 static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
 static const uint8_t EPD_MOSI = 23;
 
-//GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 //GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 
 //  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
@@ -71,7 +71,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.c
 
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
-const bool partial = false;
+const bool partial = true;
 const bool full = false;
 
 // ################ TIME VARIABLES ##########################################################
@@ -184,7 +184,6 @@ void setup()
     else
       display.display(partial); 
     SleepDuration = SleepDurationPreset;
-    display.powerOff();
   }
   else if (buttonWake_cnt == 1 && !btnPressed)
   {
@@ -195,7 +194,6 @@ void setup()
     ShowNextDayForecast();
     display.display(partial); 
     SleepDuration = 5;
-    display.powerOff();
   }
   else if (buttonWake_cnt == ESP_SLEEP_WAKEUP_EXT0 || btnPressed)
   {
@@ -207,7 +205,6 @@ void setup()
     Show4DayForecast();
     display.display(partial); 
     SleepDuration = 5;
-    display.powerOff();
   }
   delay(500);
   BeginSleep(SleepDuration);
@@ -400,6 +397,31 @@ void get_weather_data(String type)
   Serial.println("Weather data received");
 }
 // ##########################################################################################
+void getTime()
+{
+  byte get_time_cnt = 0;
+  while (SetupTime() != true)
+  {
+    Serial.println("waiting for timeserver...");
+    if (get_time_cnt > 3)
+    {
+      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
+      drawString(10, 20, String("Timeserver connection error..."), LEFT);
+      drawString(10, 50, String("'") + ntpServer + String("'"), LEFT);
+      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+      drawString(10, 90, String("Update Settings:"), LEFT);
+      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
+      display.display(full);
+      Serial.println("Connecting to timeserver failed...");
+      buttonWake_cnt = -1;
+      delay(500);
+      BeginSleep(SleepDuration);
+    }
+    get_time_cnt++;
+    delay(500);
+  }
+}
+// ##########################################################################################
 void isSetupMode()
 {
   // Check for setup mode (button held at power-on)
@@ -426,32 +448,10 @@ void isSetupMode()
     esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
     display.display(full);
     delay(500);
-    esp_deep_sleep_start(); // no timer wakeup until button is pressed
-  }
-}
-// ##########################################################################################
-void getTime()
-{
-  byte get_time_cnt = 0;
-  while (SetupTime() != true)
-  {
-    Serial.println("waiting for timeserver...");
-    if (get_time_cnt > 3)
-    {
-      u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-      drawString(10, 20, String("Timeserver connection error..."), LEFT);
-      drawString(10, 50, String("'") + ntpServer + String("'"), LEFT);
-      u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-      drawString(10, 90, String("Update Settings:"), LEFT);
-      drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
-      display.display(full);
-      Serial.println("Connecting to timeserver failed...");
-      buttonWake_cnt = -1;
-      delay(500);
-      BeginSleep(SleepDuration);
-    }
-    get_time_cnt++;
+    display.powerOff();
+    buttonWake_cnt = -1;
     delay(500);
+    esp_deep_sleep_start(); // no timer wakeup until button is pressed
   }
 }
 // #########################################################################################
@@ -483,6 +483,7 @@ void check4popups()
         buttonWake_cnt = -1;
         popup_displayed = i;
         esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+        display.powerOff();
         delay(500);
         esp_deep_sleep_start(); // no timer wakeup until button is pressed
       }
@@ -658,7 +659,7 @@ void BeginSleep(long _sleepDuration)
 // #########################################################################################
 void InitialiseDisplay()
 {
-  display.init(0, true, 20); // don't enforce full update at every cold start
+  display.init(0, false, 20); // don't enforce full update at every cold start
   SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
   // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
   display.setRotation(3);                    // Use 1 or 3 for landscape modes
@@ -670,7 +671,7 @@ void InitialiseDisplay()
   // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   display.setFullWindow();
   display.fillScreen(GxEPD_WHITE);
-  //display.display(partial); //fast fill
+  display.display(partial); //fast fill
 }
 
 // #########################################################################################
