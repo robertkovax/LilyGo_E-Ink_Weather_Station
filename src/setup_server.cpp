@@ -356,7 +356,7 @@ void handle_popups_root()
           "}else{"
           "el.insertAdjacentElement('afterend',counter);"
           "}"
-          "var update=function(){ counter.textContent=(el.value||'').length + '/45'; };"
+          "var update=function(){ counter.textContent=(el.value||'').length + '/45 (use \\\\n for line break)'; };"
           "['input','keyup','change'].forEach(function(ev){ el.addEventListener(ev,update); });"
           "update();"
           "});"
@@ -549,23 +549,58 @@ void erase_eeprom(int eeprom_size, byte erase_value)
   }
   EEPROM.commit();
 }
-
-void run_wifi_setup_portal()
-{
+// #########################################################################################
+void run_wifi_setup_portal(unsigned long timeoutMinutes) {
   WiFi.mode(WIFI_AP);
   WiFi.softAP("weather_station_wifi");
-  delay(500);
-  wifiServer.on("/", handle_wifi_root);
-  wifiServer.on("/save", HTTP_POST, handle_wifi_save);
-  wifiServer.on("/reboot", HTTP_POST, handle_wifi_reboot);
-  wifiServer.on("/refresh", HTTP_POST, handle_wifi_refresh);
-  wifiServer.on("/popups", HTTP_GET, handle_popups_root);
-  wifiServer.on("/erase_eeprom", HTTP_GET, handle_erase_eeprom);
+  delay(300);
+
+  unsigned long lastActivityMs = millis();
+
+  // Shortcut lambda to bump activity
+  auto touch = [&]() { lastActivityMs = millis(); };
+
+  // Wrap handlers so they update activity
+  wifiServer.on("/", HTTP_GET,         [&](){ touch(); handle_wifi_root(); });
+  wifiServer.on("/save", HTTP_POST,    [&](){ touch(); handle_wifi_save(); });
+  wifiServer.on("/reboot", HTTP_POST,  [&](){ touch(); handle_wifi_reboot(); });
+  wifiServer.on("/refresh", HTTP_POST, [&](){ touch(); handle_wifi_refresh(); });
+  wifiServer.on("/popups", HTTP_GET,   [&](){ touch(); handle_popups_root(); });
+  wifiServer.on("/erase_eeprom", HTTP_GET, [&](){ touch(); handle_erase_eeprom(); });
+  wifiServer.onNotFound([&](){ touch(); wifiServer.send(404, "text/plain", "Not found"); });
+
   wifiServer.begin();
   Serial.println("WiFi setup portal started. Connect to 'weather_station_wifi' and open http://192.168.4.1/");
-  while (true)
-  {
+
+  const unsigned long timeoutMs = timeoutMinutes * 60UL * 1000UL;
+  unsigned long lastAssocCheck = 0;
+
+  for (;;) {
     wifiServer.handleClient();
-    delay(10);
+
+    unsigned long now = millis();
+
+    // Update activity if any station is associated
+    if (now - lastAssocCheck >= 250) {
+      lastAssocCheck = now;
+      if (WiFi.softAPgetStationNum() > 0) {
+        touch();
+      }
+    }
+
+    // Timeout check
+    if (now - lastActivityMs >= timeoutMs) {
+      Serial.printf("%lu-minute timeout reached. Closing portal.\n", timeoutMinutes);
+      break;
+    }
+
+    delay(10); // yield and keep loop responsive
   }
+  wifiServer.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_OFF);
 }
+
+
+
+// #########################################################################################

@@ -11,8 +11,10 @@
 #include "lang.h"
 #include "common.h"
 
-extern GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display;
+//extern GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display;
 //extern GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display;
+extern GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display;
+
 extern U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
 
 // Optional externs for constants used by the functions (define them in one .cpp)
@@ -31,6 +33,7 @@ enum alignmentType
 //------String write------
 void drawString(int x, int y, String text, alignmentType alignment);
 void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String &text, alignmentType align);
+String decodeEscapes(const String &in);
 
 // -----Helper------
 void Draw_Grid();

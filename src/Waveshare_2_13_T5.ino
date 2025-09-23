@@ -61,14 +61,18 @@ static const uint8_t EPD_SCK = 18;  // CLK on pinout?
 static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
 static const uint8_t EPD_MOSI = 23;
 
-GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+//GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 //GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+
 //  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
 // Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
 
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
+const bool partial = false;
+const bool full = false;
 
 // ################ TIME VARIABLES ##########################################################
 String time_str, date_str, date_dd_mm_str; // strings to hold time and date
@@ -151,8 +155,8 @@ void setup()
       1 // core 1
   );
 
-  // any of the following function may intrrupt normal startup, show a warning or splash screen and send the controller into deep sleep
-  CheckBattAbovePercentage(10);
+  // any of the following functions may intrrupt normal startup, show a warning or splash screen and send the controller into deep sleep
+  CeckBatteryAbovePercentage(10);
   isSetupMode();
   connect2wifi();
   getTime();
@@ -174,11 +178,11 @@ void setup()
     get_weather_data("forecast");
     StopWiFi();
     while (!displayReady);
-      DisplayTodaysWeather();
+    DisplayTodaysWeather();
     if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
-      display.display(false); // full refresh
+      display.display(full); // full refresh
     else
-      display.display(false); // partial fast update
+      display.display(partial); 
     SleepDuration = SleepDurationPreset;
     display.powerOff();
   }
@@ -189,7 +193,7 @@ void setup()
     StopWiFi();
     while (!displayReady);
     ShowNextDayForecast();
-    display.display(false); // partial fast update
+    display.display(partial); 
     SleepDuration = 5;
     display.powerOff();
   }
@@ -201,7 +205,7 @@ void setup()
     StopWiFi();
     while (!displayReady);
     Show4DayForecast();
-    display.display(false); // partial fast update
+    display.display(partial); 
     SleepDuration = 5;
     display.powerOff();
   }
@@ -383,7 +387,7 @@ void get_weather_data(String type)
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update Settings:"), LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
-      display.display(false);
+      display.display(full);
       StopWiFi();
       buttonWake_cnt = -1;
       Serial.println("Failed to get weather data...");
@@ -410,11 +414,19 @@ void isSetupMode()
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
     drawString(10, 80, String("open settings page:"), LEFT);
     drawString(10, 100, String("http://192.168.4.1/"), LEFT);
-    display.display(false);
-    run_wifi_setup_portal();
-    // Will restart after setup
-    while (true)
-      delay(1000);
+    display.display(full);
+
+    run_wifi_setup_portal(10);
+
+    display.fillScreen(GxEPD_WHITE);
+    u8g2Fonts.setFont(u8g2_font_helvB14_tf);
+    drawString(10, 30, String("Setup timeout"), LEFT);
+    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+    drawString(10, 60, String("going to sleep..."), LEFT);
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+    display.display(full);
+    delay(500);
+    esp_deep_sleep_start(); // no timer wakeup until button is pressed
   }
 }
 // ##########################################################################################
@@ -432,7 +444,7 @@ void getTime()
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update Settings:"), LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
-      display.display(false);
+      display.display(full);
       Serial.println("Connecting to timeserver failed...");
       buttonWake_cnt = -1;
       delay(500);
@@ -462,16 +474,17 @@ void check4popups()
         u8g2Fonts.setFont(u8g2_font_helvB14_tf);
         while (!displayReady)
           ;
+        popup_msg = decodeEscapes(popup_msg);
         drawStringMaxWidth(10, 20, 170, popup_msg, LEFT);
         Sunny(220, 35, Large, "01");
         u8g2Fonts.setFont(u8g2_font_helvB10_tf);
         drawString(10, 110, String("press Next to continue..."), LEFT);
-        display.display(false);
+        display.display(full);
         buttonWake_cnt = -1;
         popup_displayed = i;
         esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
         delay(500);
-        esp_deep_sleep_start();
+        esp_deep_sleep_start(); // no timer wakeup until button is pressed
       }
     }
   }
@@ -482,7 +495,7 @@ void check4popups()
   }
 }
 // #########################################################################################
-void CheckBattAbovePercentage(byte check_percentage)
+void CeckBatteryAbovePercentage(byte check_percentage)
 {
   uint8_t percentage = 100;
   float voltage = analogRead(35) / 4096.0 * 7.46;
@@ -507,12 +520,12 @@ void CheckBattAbovePercentage(byte check_percentage)
       display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
       display.fillRect(90 + 34, 60 - 10, 2, 5, GxEPD_BLACK);
       display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
-      display.display(false);
+      display.display(full);
       display.powerOff();
       buttonWake_cnt = -1;
       esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
       delay(500);
-      esp_deep_sleep_start();
+      esp_deep_sleep_start(); // no timer wakeup until button is pressed
     }
   }
 }
@@ -606,7 +619,7 @@ void connect2wifi()
       u8g2Fonts.setFont(u8g2_font_helvB08_tf);
       drawString(10, 90, String("Update WiFi credentials:"), LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
-      display.display(false);
+      display.display(full);
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
@@ -657,7 +670,7 @@ void InitialiseDisplay()
   // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   display.setFullWindow();
   display.fillScreen(GxEPD_WHITE);
-  display.display(true); //fast fill
+  //display.display(partial); //fast fill
 }
 
 // #########################################################################################

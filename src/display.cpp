@@ -17,99 +17,146 @@ void drawString(int x, int y, String text, alignmentType alignment)
   u8g2Fonts.setCursor(x, y + h);
   u8g2Fonts.print(text);
 }
+
+// ########################################################################################
+// Turn "\n" (two chars) into an actual newline, also handle \r and \t.
+String decodeEscapes(const String &in) {
+  String out; out.reserve(in.length());
+  for (int i = 0; i < (int)in.length(); ++i) {
+    char c = in[i];
+    if (c == '\\' && i + 1 < (int)in.length()) {
+      char n = in[i + 1];
+      if (n == 'n')      { out += '\n'; ++i; continue; }
+      if (n == 'r')      { out += '\r'; ++i; continue; }
+      if (n == 't')      { out += '\t'; ++i; continue; }
+      // leave unknown escapes as-is
+    }
+    out += c;
+  }
+  return out;
+}
+
 // ########################################################################################
 //  Assumes `alignmentType { LEFT, CENTER, RIGHT }`
 //  and u8g2Fonts is already configured with the font you want.
-
 static uint16_t textPixelWidth(const String &s)
 {
   // u8g2-for-TFT_eSPI exposes UTF-8 width
   return u8g2Fonts.getUTF8Width(s.c_str());
 }
-
+// ########################################################################################
 void drawStringMaxWidth(int x, int y, uint16_t max_w_px, const String &text, alignmentType align)
 {
-  // Split into words and wrap by pixel width
-  String lines[8]; // up to 8 lines; enlarge if you need more
+  String lines[8]; // up to 8 lines; enlarge if needed
   int line_count = 0;
 
-  String current = "";
+  auto push_line = [&](const String &s){
+    if (line_count < 8) lines[line_count++] = s;
+  };
+
+  String current;
   int i = 0, n = text.length();
+
   while (i < n)
   {
-    // read next "word" (sequence of non-space) and the following spaces
-    String word = "";
-    while (i < n && !isspace((unsigned char)text[i]))
-    {
-      word += text[i++];
+    // Hard break on '\n'
+    if (text[i] == '\n') {
+      if (!current.isEmpty()) push_line(current);
+      else push_line(""); // preserve blank line
+      current = "";
+      ++i;
+      continue;
     }
-    String spaces = "";
-    while (i < n && isspace((unsigned char)text[i]))
-    {
-      spaces += text[i++];
+    if (text[i] == '\r') { ++i; continue; } // ignore CR
+
+    // Collapse any run of whitespace (excluding '\n' which is handled above)
+    bool saw_space = false;
+    while (i < n) {
+      char c = text[i];
+      if (c == '\n' || c == '\r') break;
+      if (isspace((unsigned char)c)) { saw_space = true; ++i; }
+      else break;
     }
 
-    // Try to append (preserve single space between words when wrapping)
-    String trial = current.isEmpty() ? word : current + " " + word;
-    if (current.isEmpty() && textPixelWidth(word) > max_w_px)
-    {
-      // Single word too long: hard-break it
-      String chunk = "";
-      for (int k = 0; k < (int)word.length(); ++k)
-      {
-        String tryChunk = chunk + word[k];
-        if (textPixelWidth(tryChunk) > max_w_px)
-        {
-          if (line_count < 8)
-            lines[line_count++] = chunk;
-          chunk = String(word[k]);
-        }
-        else
-        {
-          chunk = tryChunk;
-        }
-      }
-      current = chunk; // remainder of the long word becomes current line
+    // Read next word (non-space, non-newline)
+    String word = "";
+    while (i < n) {
+      char c = text[i];
+      if (c == '\n' || c == '\r' || isspace((unsigned char)c)) break;
+      word += c;
+      ++i;
+    }
+
+    if (word.isEmpty()) {
+      // No word found (e.g., trailing spaces); continue loop
       continue;
     }
 
-    if (textPixelWidth(trial) <= max_w_px)
-    {
-      current = trial;
-    }
-    else
-    {
-      if (line_count < 8)
-        lines[line_count++] = current;
-      current = word; // start new line with the word
+    // Try to place the word (insert one space only if current not empty and we saw any whitespace)
+    String trial = current.isEmpty() ? word : (saw_space ? current + " " + word : current + word);
+
+    // If word must start a new line due to width
+    if (!current.isEmpty() && textPixelWidth(trial) > max_w_px) {
+      push_line(current);
+      current = word;
+      // If the word itself is longer than the line, hard-break it
+      if (textPixelWidth(current) > max_w_px) {
+        String chunk = "";
+        for (int k = 0; k < (int)word.length(); ++k) {
+          String tryChunk = chunk + word[k];
+          if (textPixelWidth(tryChunk) > max_w_px) {
+            push_line(chunk);
+            chunk = String(word[k]);
+          } else {
+            chunk = tryChunk;
+          }
+        }
+        current = chunk; // remainder on current line
+      }
+    } else {
+      // Fits on current line as-is
+      if (current.isEmpty()) {
+        // New line or start of block
+        if (textPixelWidth(word) > max_w_px) {
+          // Hard-break long word on an empty line
+          String chunk = "";
+          for (int k = 0; k < (int)word.length(); ++k) {
+            String tryChunk = chunk + word[k];
+            if (textPixelWidth(tryChunk) > max_w_px) {
+              push_line(chunk);
+              chunk = String(word[k]);
+            } else {
+              chunk = tryChunk;
+            }
+          }
+          current = chunk;
+        } else {
+          current = word;
+        }
+      } else {
+        current = trial;
+      }
     }
   }
-  if (!current.isEmpty() && line_count < 8)
-    lines[line_count++] = current;
 
-  // Measure block width and line height from the active font
+  if (!current.isEmpty() && line_count < 8) push_line(current);
+
+  // Metrics & drawing unchanged
   int16_t ascent = u8g2Fonts.getFontAscent();
   int16_t descent = u8g2Fonts.getFontDescent(); // usually negative
-  int line_h = (ascent - descent) * 1.2;        // reliable line spacing
+  int line_h = (int)((ascent - descent) * 1.2f);
 
   uint16_t block_w = 0;
-  for (int j = 0; j < line_count; ++j)
-  {
+  for (int j = 0; j < line_count; ++j) {
     uint16_t w = textPixelWidth(lines[j]);
-    if (w > block_w)
-      block_w = w;
+    if (w > block_w) block_w = w;
   }
 
-  // Align the whole block
   int draw_x = x;
-  if (align == CENTER)
-    draw_x = x - (int)block_w / 2;
-  else if (align == RIGHT)
-    draw_x = x - (int)block_w;
+  if (align == CENTER)      draw_x = x - (int)block_w / 2;
+  else if (align == RIGHT)  draw_x = x - (int)block_w;
 
-  // Draw lines (u8g2Fonts.setCursor expects baseline coordinates)
-  for (int j = 0; j < line_count; ++j)
-  {
+  for (int j = 0; j < line_count; ++j) {
     u8g2Fonts.setCursor(draw_x, y + j * line_h);
     u8g2Fonts.print(lines[j]);
   }
