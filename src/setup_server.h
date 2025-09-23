@@ -47,7 +47,7 @@ extern int daylightOffset_hour;
 #define EEPROM_MARKER_VALUE 0xA5
 
 // Starts the WiFi setup portal (webserver)
-void run_wifi_setup_portal();
+void run_wifi_setup_portal(unsigned long portalTimeoutMinutes);
 
 // Loads credentials and config from EEPROM or owm_credentials.h
 void load_config();
