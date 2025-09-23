@@ -594,7 +594,7 @@ void run_wifi_setup_portal(uint32_t timeoutMinutes) {
       break;
     }
 
-    delay(10); // yield to WiFi/RTOS; keeps HTTP snappy
+    delay(100); // yield to WiFi/RTOS; keeps HTTP snappy
   }
 
   wifiServer.stop();
