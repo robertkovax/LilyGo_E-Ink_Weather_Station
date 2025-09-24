@@ -550,57 +550,68 @@ void erase_eeprom(int eeprom_size, byte erase_value)
   EEPROM.commit();
 }
 // #########################################################################################
-void run_wifi_setup_portal(uint32_t timeoutMinutes) {
+void run_wifi_setup_portal(uint32_t timeoutMinutes)
+{
   WiFi.mode(WIFI_AP);
   WiFi.softAP("weather_station_wifi");
   delay(300);
 
   const uint32_t timeoutMs = timeoutMinutes * 60000UL; // minutes → ms safely
   // Helper: extend deadline on any activity
-  auto nowMs    = []() -> uint32_t { return millis(); };
+  auto nowMs = []() -> uint32_t
+  { return millis(); };
   uint32_t deadline = nowMs() + timeoutMs;
-  auto touch = [&]() { deadline = nowMs() + timeoutMs; };
+  auto touch = [&]()
+  { deadline = nowMs() + timeoutMs; };
 
   // Touch on every handler
-  wifiServer.on("/", HTTP_GET,         [&](){ touch(); handle_wifi_root(); });
-  wifiServer.on("/save", HTTP_POST,    [&](){ touch(); handle_wifi_save(); });
-  wifiServer.on("/reboot", HTTP_POST,  [&](){ touch(); handle_wifi_reboot(); });
-  wifiServer.on("/refresh", HTTP_POST, [&](){ touch(); handle_wifi_refresh(); });
-  wifiServer.on("/popups", HTTP_GET,   [&](){ touch(); handle_popups_root(); });
-  wifiServer.on("/erase_eeprom", HTTP_GET, [&](){ touch(); handle_erase_eeprom(); });
-  wifiServer.onNotFound([&](){ touch(); wifiServer.send(404, "text/plain", "Not found"); });
+  wifiServer.on("/", HTTP_GET, [&]()
+                { touch(); handle_wifi_root(); });
+  wifiServer.on("/save", HTTP_POST, [&]()
+                { touch(); handle_wifi_save(); });
+  wifiServer.on("/reboot", HTTP_POST, [&]()
+                { touch(); handle_wifi_reboot(); });
+  wifiServer.on("/refresh", HTTP_POST, [&]()
+                { touch(); handle_wifi_refresh(); });
+  wifiServer.on("/popups", HTTP_GET, [&]()
+                { touch(); handle_popups_root(); });
+  wifiServer.on("/erase_eeprom", HTTP_GET, [&]()
+                { touch(); handle_erase_eeprom(); });
+  wifiServer.onNotFound([&]()
+                        { touch(); wifiServer.send(404, "text/plain", "Not found"); });
 
   wifiServer.begin();
-  Serial.printf("Portal up. Timeout: %lu min (%lu ms)\n", (unsigned long)timeoutMinutes, (unsigned long)timeoutMs);
+  Serial.printf("Portal up. Timeout: %lu min\n", (unsigned long)timeoutMinutes);
 
   uint32_t lastAssocCheck = 0;
-
-  for (;;) {
+  bool firstAssocTouched = false;
+  for (;;)
+  {
     wifiServer.handleClient();
-
     uint32_t now = nowMs();
-
-    // Treat association as "activity" (checked ~4×/s)
-    if ((uint32_t)(now - lastAssocCheck) >= 250UL) {
+    // Treat first association as "activity" (checked ~4×/s)
+    if ((uint32_t)(now - lastAssocCheck) >= 250UL)
+    {
       lastAssocCheck = now;
-      if (WiFi.softAPgetStationNum() > 0) {
-        touch(); // keep alive while a station is associated
+      if (WiFi.softAPgetStationNum() > 0 && !firstAssocTouched)
+      {
+        touch();
+        firstAssocTouched = true;
+        Serial.println("Client associated.");
       }
     }
-
-    // Deadline reached? Use signed diff to handle wraparound safely.
-    if ((int32_t)(now - deadline) >= 0) {
+    // Deadline reached?
+    if ((int32_t)(now - deadline) >= 0)
+    {
       Serial.printf("%lu-minute timeout reached. Closing portal.\n", (unsigned long)timeoutMinutes);
       break;
     }
-
-    delay(100); // yield to WiFi/RTOS; keeps HTTP snappy
+    delay(100); // yield to WiFi/RTOS
   }
-
   wifiServer.stop();
+  delay(20);
   WiFi.softAPdisconnect(true);
-  WiFi.mode(WIFI_OFF);
+  delay(20);
 }
-
 
 // #########################################################################################
