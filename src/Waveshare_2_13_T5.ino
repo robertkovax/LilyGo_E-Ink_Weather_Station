@@ -99,6 +99,7 @@ int SleepDurationPreset = 60; // default, it will be overwritten in load_config(
 int SleepDuration;
 int SleepTime = 23; // Sleep after (23+1) 00:00 to save battery power
 int WakeupTime = 0; // Don't wakeup until after 07:00 to save battery power
+int wifi_setup_portal_timeout = 15;
 
 // ############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
 #define BUTTON_PIN 39
@@ -174,7 +175,7 @@ void setup()
     get_weather_data("forecast");
     StopWiFi();
     while (!displayReady);
-    DisplayTodaysWeather();
+    ShowTodaysWeather();
     if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
       display.display(full); // full refresh
     else
@@ -214,11 +215,10 @@ void loop()
   // and will wake up based on the button press or timer.
 }
 // #########################################################################################
-void DisplayTodaysWeather()
-{ // 2.13" e-paper display is 250x122 useable resolution
-  // Draw_Grid();
-  Draw_Heading_Section();                                  // Top line of the display
-  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon); // WxConditions[0].Icon
+void ShowTodaysWeather()
+{ 
+  Draw_Heading_Section();                                 
+  DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon);
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(0, 35, String(WxConditions[0].Temperature, 1) + "°", LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
@@ -240,7 +240,7 @@ void ShowNextDayForecast()
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 36, "weather tomorrow:", LEFT);
   int startIndex = tomorrowStartIndex(6);
-  Serial.println("Forecast for " + String(WxForecast[startIndex].Period) + ", " + String(WxForecast[startIndex].Temperature) + "C ," + "pos = " + startIndex);
+  Serial.println("Forecast for " + String(WxForecast[startIndex].Period));
   for (int i = 0; i <= 4; i++)
   {
     Draw_Next_Day_3hr_Forecast(i * 43, 96, startIndex + i);
@@ -254,12 +254,12 @@ void Show4DayForecast()
   Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 33, "4-day forecast:", LEFT);
-  int forecastStart = tomorrowStartIndex(8);
+  int forecastStart = tomorrowStartIndex(8); // we get the low at the end of the day, possibly next morning
   int maxPos = 0, minPos = 0;
   for (int DayIndex = 0; DayIndex < 4; DayIndex++)
-  {                                                                              // show 4 days
-    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High; // init
-    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;   // init
+  {                                                                              
+    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High; 
+    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;   
     for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++)
     {
       if (WxForecast[r].High >= HLReadings[DayIndex].High)
@@ -282,7 +282,6 @@ void Draw_Heading_Section()
 {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(0, 1, Location_name, LEFT);
-  // drawString(SCREEN_WIDTH, 1, date_str+time_str, RIGHT);
   drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str, RIGHT); //+ " " + time_str
   DrawBattery(80, 12);
   display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
@@ -290,7 +289,7 @@ void Draw_Heading_Section()
 // #########################################################################################
 void Draw_3hr_Forecast(int x, int y, int index)
 {
-  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon); // WxForecast[index].Icon
+  DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon);
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(x + 7, y - 21, WxForecast[index].Period.substring(11, 16), LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB10_tf);
@@ -434,7 +433,7 @@ void isSetupMode()
     drawString(10, 100, String("http://192.168.4.1/"), LEFT);
     display.display(full);
 
-    run_wifi_setup_portal(10);
+    run_wifi_setup_portal(wifi_setup_portal_timeout);
 
     display.fillScreen(GxEPD_WHITE);
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
@@ -571,7 +570,7 @@ uint8_t StartWiFi(uint8_t *mac = nullptr)
   {
     connectionStatus = WiFi.status();
     if (millis() > start + 10000)
-    { // Wait 15-secs maximum
+    { 
       AttemptConnection = false;
     }
     if (connectionStatus == WL_CONNECTED || connectionStatus == WL_CONNECT_FAILED)
@@ -583,7 +582,7 @@ uint8_t StartWiFi(uint8_t *mac = nullptr)
   if (connectionStatus == WL_CONNECTED)
   {
     wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
-    Serial.println("WiFi connected to: " + WiFi.localIP().toString());
+    Serial.println("WiFi connected to: " + WiFi.localIP().toString() + " (strength: " + wifi_signal + ")");
   }
   else
     Serial.println("WiFi connection *** FAILED ***");
