@@ -7,7 +7,10 @@ This directory is a fork of David Bird’s ESP32-e-Paper Weather Display project
 - Cycling through "current day", "next day" and "4-day" forecast view on button press. Long-press brings up the 4-day forecast right away. 
 - WiFi server for web setup of credentials and geographic data (no need to reprogram the controller every time).
 - Improved icons (night icons are displayed with a moon symbol instead of a sun).
-- Updated display layout for improved readability (optimized for LilyGo 2.13" 250x122 e-Paper display)
+- Updated display layout for improved readability (optimized for LilyGo 2.13" 250x122 e-Paper display).
+- implemented battery check.
+- Popup messages for WiFi, battery, weather server, or time sync errors.
+- Fast partial screen refreshes
 
 - **Popup greetings feature:** displays a recurring message every year on a set date (e.g. birthday greeting).
 
@@ -51,8 +54,8 @@ This will show your greeting message every year on the set date:
 - 3D printed housing
 
 ## Notes
-- The default screen refresh period is set to 30 min. The controller is in deep sleep in between. This enables battery life for a couple of months on an 1000mAh 3.7V battery. 
+- The default screen refresh period is set to 60 min. The controller is in deep sleep in between. This enables battery life for a couple of months using a 1000mAh 3.7V battery. 
 
-- Recharge the battery via the USB plug.
+- Battery is charged via the USB plug.
 
 - This port was built using PlatformIO in VScode.
