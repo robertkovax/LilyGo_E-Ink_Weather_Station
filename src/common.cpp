@@ -148,7 +148,7 @@ boolean UpdateLocalTime()
 {
   struct tm timeinfo;
   char time_output[30], day_output[30], dd_mm_output[10], update_time[30];
-  while (!getLocalTime(&timeinfo, 3000))
+  while (!getLocalTime(&timeinfo, 5000))
   { // Wait for 5-sec for time to synchronise
     Serial.println("Failed to obtain time");
     return false;
@@ -226,7 +226,7 @@ bool obtain_wx_data(WiFiClient &client, const String &requestType)
   }
   else
   {
-    Serial.printf("connection failed, error: %s",
+    Serial.printf("connection failed, error: %s\n",
                   http.errorToString(httpCode).c_str());
     client.stop();
     http.end();

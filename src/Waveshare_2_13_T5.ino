@@ -1,6 +1,6 @@
 /* ESP Weather Display using an EPD 2.13" Display, obtains data from Open Weather Map, decodes it and then displays it.
    ####################################################################################################################################
-   Original software, ideas and concepts Copyright (c) David Bird 2018. 
+   Original software, ideas and concepts Copyright (c) David Bird 2018.
    All rights reserved. See http://www.dsbird.org.uk
 
    License summary:
@@ -58,8 +58,8 @@ static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data 
 static const uint8_t EPD_MOSI = 23;
 
 GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-//GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-//GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+// GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+// GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
 
 //  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
 U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
@@ -117,6 +117,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButtonInterrupt, FALLING);
   StartTime = millis();
   Serial.begin(115200);
+  Serial.println("\n~~~~~~~~~~~~~~~~~~~~~~~");
   Serial.println("Weather station active!");
 
   // Load all saved settings from EEPROM or program defaults
@@ -124,12 +125,12 @@ void setup()
   SleepDuration = SleepDurationPreset;
 
   // button update logic
-  const auto wakeup_cause  = esp_sleep_get_wakeup_cause();
+  const auto wakeup_cause = esp_sleep_get_wakeup_cause();
   Serial.print("Wakeup cause: ");
   switch (esp_sleep_get_wakeup_cause())
   {
   case 0: // show main weather section
-    Serial.println("Power on / reset");
+    Serial.println("Power ON / reset");
     buttonWake_cnt = 0;
     break;
   case 2: // button press - cycle through weather forecast screens
@@ -162,7 +163,7 @@ void setup()
   // ################################# Display content logic ########################################
   // advance screen on every button press
   // on long press go to 4 day forecast immediately
-  const bool btnPressed    = !digitalRead(BUTTON_PIN);
+  const bool btnPressed = !digitalRead(BUTTON_PIN);
   if (((wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
         buttonWake_cnt <= 0 ||
         buttonWake_cnt >= 3) &&
@@ -174,12 +175,13 @@ void setup()
     get_weather_data("current");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
+    while (!displayReady)
+      ;
     ShowTodaysWeather();
     if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
       display.display(full); // full refresh
     else
-      display.display(partial); 
+      display.display(partial);
     SleepDuration = SleepDurationPreset;
   }
   else if (buttonWake_cnt == 1 && !btnPressed)
@@ -187,9 +189,10 @@ void setup()
     Serial.println("Showing next day's forecast");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
+    while (!displayReady)
+      ;
     ShowNextDayForecast();
-    display.display(partial); 
+    display.display(partial);
     SleepDuration = 5;
   }
   else if (buttonWake_cnt == ESP_SLEEP_WAKEUP_EXT0 || btnPressed)
@@ -198,9 +201,10 @@ void setup()
     Serial.println("Showing 4 day forecast");
     get_weather_data("forecast");
     StopWiFi();
-    while (!displayReady);
+    while (!displayReady)
+      ;
     Show4DayForecast();
-    display.display(partial); 
+    display.display(partial);
     SleepDuration = 5;
   }
   delay(500);
@@ -216,8 +220,8 @@ void loop()
 }
 // #########################################################################################
 void ShowTodaysWeather()
-{ 
-  Draw_Heading_Section();                                 
+{
+  Draw_Heading_Section();
   DisplayWXicon(107, 44, WxConditions[0].Icon, LargeIcon);
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(0, 35, String(WxConditions[0].Temperature, 1) + "°", LEFT);
@@ -257,9 +261,9 @@ void Show4DayForecast()
   int forecastStart = tomorrowStartIndex(8); // we get the low at the end of the day, possibly next morning
   int maxPos = 0, minPos = 0;
   for (int DayIndex = 0; DayIndex < 4; DayIndex++)
-  {                                                                              
-    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High; 
-    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;   
+  {
+    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High;
+    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;
     for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++)
     {
       if (WxForecast[r].High >= HLReadings[DayIndex].High)
@@ -363,12 +367,12 @@ void get_weather_data(String type)
   {
     if (receivedOk == false && type == "current")
     {
-      Serial.println("waiting for current weather data...");
+      Serial.println("Waiting for weather data...");
       receivedOk = obtain_wx_data(client, "weather");
     }
     if (receivedOk == false && type == "forecast")
     {
-      Serial.println("waiting for forecast data...");
+      Serial.println("Waiting for forecast data...");
       receivedOk = obtain_wx_data(client, "forecast");
     }
     if (get_weather_cnt > 3 && (!receivedOk))
@@ -395,10 +399,10 @@ void get_weather_data(String type)
 void getTime()
 {
   byte get_time_cnt = 0;
+  Serial.println("Waiting for timeserver...");
   while (SetupTime() != true)
   {
-    Serial.println("waiting for timeserver...");
-    if (get_time_cnt > 3)
+    if (get_time_cnt > 4)
     {
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("Timeserver connection error..."), LEFT);
@@ -407,7 +411,7 @@ void getTime()
       drawString(10, 90, String("Update Settings:"), LEFT);
       drawString(10, 105, String("turn Off-->On while holding the 'Next' button"), LEFT);
       display.display(full);
-      Serial.println("Connecting to timeserver failed...");
+      Serial.println("Connection to timeserver failed...");
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
@@ -487,7 +491,7 @@ void check4popups()
   if (popup_found == 255)
   {
     popup_displayed = 255;
-    Serial.println("No popup msg today");
+    Serial.println("No popup message today");
   }
 }
 // #########################################################################################
@@ -502,7 +506,7 @@ void CeckBatteryAbovePercentage(byte check_percentage)
       percentage = 100;
     if (voltage <= 3.50)
       percentage = 0;
-    Serial.println("Voltage = " + String(voltage));
+    Serial.println("Battery: " + String(voltage) + "V");
     if (percentage <= check_percentage)
     {
       Serial.println("critical battery level, please charge!");
@@ -526,89 +530,103 @@ void CeckBatteryAbovePercentage(byte check_percentage)
   }
 }
 // #########################################################################################
-uint8_t StartWiFi(uint8_t *mac = nullptr)
+uint8_t StartWiFi(const uint8_t *mac = nullptr)
 {
-  Serial.println("\r\nConnecting to: " + String(ssid));
+  Serial.println("Connecting to WiFi SSID: " + String(ssid));
+
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
-  esp_err_t err;
-  // all-zeros means skip custom MAC
-  if (mac != nullptr && !(mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) &&
-      !(mac[0] == 0xFF && mac[1] == 0xFF && mac[2] == 0xFF && mac[3] == 0xFF && mac[4] == 0xFF && mac[5] == 0xFF) && !(mac[0] & 0x01))
-  {
+
+  // If a valid unicast MAC (not all 00, not all FF, LSB of first byte not multicast), set it.
+  auto valid_unicast_mac = [](const uint8_t *m) {
+    if (!m) return false;
+    bool all_zero = true, all_ff = true;
+    for (int i = 0; i < 6; ++i) {
+      all_zero &= (m[i] == 0x00);
+      all_ff   &= (m[i] == 0xFF);
+    }
+    if (all_zero || all_ff) return false;
+    if (m[0] & 0x01) return false; // multicast bit set -> not a unicast MAC
+    return true;
+  };
+
+  if (valid_unicast_mac(mac)) {
+    // Must stop before changing MAC on ESP32
     esp_wifi_stop();
-    Serial.printf("seting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
+    Serial.printf("setting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
                   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    err = esp_wifi_set_mac(WIFI_IF_STA, mac);
-    if (err != ESP_OK)
-    {
+    esp_err_t err = esp_wifi_set_mac(WIFI_IF_STA, const_cast<uint8_t*>(mac));
+    if (err != ESP_OK) {
       Serial.printf("esp_wifi_set_mac failed: 0x%04X\n", err);
+    } else {
+      Serial.print("Set MAC success: ");
     }
-    else
-    {
-      Serial.println("Set MAC success!");
-    }
+  } else {
+    Serial.print("Using hardware MAC: ");
   }
+
   // Verify MAC address
-  uint8_t cur[6];
+  uint8_t cur[6] = {};
   esp_wifi_get_mac(WIFI_IF_STA, cur);
-  Serial.printf("Current MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+  Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n",
                 cur[0], cur[1], cur[2], cur[3], cur[4], cur[5]);
 
-  err = esp_wifi_start();
-  if (err != ESP_OK)
-  {
+  esp_err_t err = esp_wifi_start();
+  if (err != ESP_OK) {
     Serial.printf("esp_wifi_start err=0x%02X\n", err);
   }
 
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
-  unsigned long start = millis();
-  uint8_t connectionStatus;
-  bool AttemptConnection = true;
-  while (AttemptConnection)
-  {
-    connectionStatus = WiFi.status();
-    if (millis() > start + 15000)
-    { 
-      AttemptConnection = false;
-    }
-    if (connectionStatus == WL_CONNECTED || connectionStatus == WL_CONNECT_FAILED)
-    {
-      AttemptConnection = false;
-    }
-    delay(50);
-  }
-  if (connectionStatus == WL_CONNECTED)
-  {
-    wifi_signal = WiFi.RSSI(); // Get Wifi Signal strength now, because the WiFi will be turned off to save power!
-    Serial.println("WiFi connected to: " + WiFi.localIP().toString() + " (strength: " + wifi_signal + ")");
-  }
-  else
-    Serial.println("WiFi connection *** FAILED ***");
-  return connectionStatus;
+
+  // Return current status WITHOUT waiting
+  return WiFi.status();
 }
 // ##########################################################################################
+// Connect with retries + UI + sleep policy. ALL waiting happens here.
 void connect2wifi()
 {
-  byte reconnect_cnt = 0;
+  // Parse desired MAC
   uint8_t desiredMac[6] = {};
   if (sscanf(MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
              &desiredMac[0], &desiredMac[1], &desiredMac[2],
-             &desiredMac[3], &desiredMac[4], &desiredMac[5]) == 6)
+             &desiredMac[3], &desiredMac[4], &desiredMac[5]) != 6)
   {
-    // desiredMac now contains the six uint8_t values
+    memset(desiredMac, 0, sizeof(desiredMac)); // use hardware MAC
   }
-  else
+
+  byte reconnect_cnt = 0;
+  const unsigned long attempt_timeout_ms = 15000; // full attempt window
+  const unsigned long poll_ms            = 500;
+  const unsigned long cooldown_ms        = 800;   // small pause between attempts
+
+  for (;;)
   {
-    memset(desiredMac, 0, sizeof(desiredMac));
-    Serial.println("using hardware MAC");
-  }
-  while (StartWiFi(desiredMac) != WL_CONNECTED)
-  {
-    Serial.println("waiting for WiFi connection...");
-    if (reconnect_cnt > 1)
-    {
+    // Kick off (non-blocking)
+    StartWiFi(desiredMac);
+
+    // Wait ONLY here: until connected OR attempt window expires
+    unsigned long t0 = millis();
+    uint8_t status   = WL_IDLE_STATUS;
+    Serial.print("Connecting..");
+    do {
+      status = WiFi.status();
+      if (status == WL_CONNECTED) {
+        int wifi_signal = WiFi.RSSI();
+        Serial.println("\nWiFi connected! \nlocal IP:" + WiFi.localIP().toString() +
+                       "\nstrength: " + String(wifi_signal) + " dBm");
+        return; // success
+      }
+      delay(poll_ms);
+      Serial.print(".");
+    } while ((millis() - t0) < attempt_timeout_ms);
+
+    // Attempt failed (timed out)
+    reconnect_cnt++;
+    Serial.printf("\nWiFi connection attempt %u failed (status=%d)\n", reconnect_cnt, status);
+
+    if (reconnect_cnt > 2) {
+      Serial.println("WiFi connection abandoned. Better luck next time...");
       u8g2Fonts.setFont(u8g2_font_helvB12_tf);
       drawString(10, 20, String("WiFi connection error... "), LEFT);
       drawString(10, 50, String("ssid: '") + ssid + String("'"), LEFT);
@@ -619,9 +637,13 @@ void connect2wifi()
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
+      return; // device will sleep
     }
-    reconnect_cnt++;
-    delay(1000);
+
+    // Cooldown + hard reset of station state before next attempt
+    WiFi.disconnect(true, true);   // forget connection + drop STA
+    esp_wifi_stop();               // stop driver to clear state
+    delay(cooldown_ms);
   }
 }
 // #########################################################################################
@@ -666,7 +688,7 @@ void InitialiseDisplay()
   // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
   display.setFullWindow();
   display.fillScreen(GxEPD_WHITE);
-  display.display(partial); //fast fill
+  display.display(partial); // fast fill
 }
 
 // #########################################################################################
@@ -674,7 +696,7 @@ void DisplayInitTask(void *pv)
 {
 
   InitialiseDisplay();
-  Serial.println("Display init finished");
+  Serial.println("\nDisplay init finished");
   displayReady = true; // signal “done”
   vTaskDelete(NULL);   // kill this task
 }
