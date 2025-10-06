@@ -569,7 +569,7 @@ uint8_t StartWiFi(uint8_t *mac = nullptr)
   while (AttemptConnection)
   {
     connectionStatus = WiFi.status();
-    if (millis() > start + 10000)
+    if (millis() > start + 15000)
     { 
       AttemptConnection = false;
     }
