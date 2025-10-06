@@ -1,5 +1,5 @@
-bblanchon/ArduinoJson@^7.4.1
-adafruit/Adafruit BusIO@^1.17.1
-adafruit/Adafruit GFX Library@^1.12.1
 olikraus/U8g2_for_Adafruit_GFX@^1.8.0
 zinggjm/GxEPD2@^1.6.4
+adafruit/Adafruit BusIO@^1.17.1
+adafruit/Adafruit GFX Library@^1.12.1
+bblanchon/ArduinoJson@^7.4.1
