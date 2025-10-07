@@ -434,7 +434,8 @@ void isSetupMode()
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
     drawString(10, 80, String("open settings: http://192.168.4.1/"), LEFT);
-    drawString(10, 110, String("(https://github.com/robertkovax)"), LEFT);
+    u8g2Fonts.setFont(u8g2_font_helvB08_tf);
+    drawString(10, 110, String("source: https://github.com/robertkovax"), LEFT);
     display.display(full);
 
     run_wifi_setup_portal(wifi_setup_portal_timeout);
@@ -444,6 +445,7 @@ void isSetupMode()
     drawString(10, 30, String("Setup timeout"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("going to sleep..."), LEFT);
+    drawString(10, 80, String("press button to wake!"), LEFT);
     esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
     display.display(full);
     delay(500);
