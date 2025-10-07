@@ -228,6 +228,28 @@ const char *wifi_form_html_template = R"rawliteral(
       width: 100%;
       margin-bottom: 10px;
     }
+    /* Footer */
+    .footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid #e5e5e5;
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .footer a {
+      color: #003344;
+      text-decoration: none;
+      border-bottom: 1px dotted rgba(0, 51, 68, 0.4);
+      transition: color 0.2s ease, border-color 0.2s ease;
+      overflow-wrap: anywhere;
+    }
+    .footer a:hover {
+      color: #003344;
+      border-bottom-color: currentColor;
+      text-decoration: underline;
+    }
   </style>
   <script>
     function detectChange(input, userTyped = false) {
@@ -303,6 +325,10 @@ const char *wifi_form_html_template = R"rawliteral(
     <form action='/reboot' method='POST' class="btn-group">
       <button type='submit'>Apply and Reboot</button>
     </form>
+    <div class="footer">
+      &copy; 2025 Robert Kovacs (<a href="https://www.robertkovax.com" target="_blank">www.robertkovax.com</a>)
+      <br>source: <a href="https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station" target="_blank">https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station</a>
+    </div>
   </div>
 </body>
 </html>

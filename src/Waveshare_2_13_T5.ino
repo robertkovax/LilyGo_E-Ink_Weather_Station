@@ -426,15 +426,15 @@ void isSetupMode()
   // Check for setup mode (button held at power-on)
   if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
   { // Power on reset
-    Serial.println("entering setup mode...");
+    Serial.println("Entering setup mode!");
     while (!displayReady)
       ;
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
     drawString(10, 30, String("Setup mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
-    drawString(10, 80, String("open settings page:"), LEFT);
-    drawString(10, 100, String("http://192.168.4.1/"), LEFT);
+    drawString(10, 80, String("open settings: http://192.168.4.1/"), LEFT);
+    drawString(10, 110, String("(https://github.com/robertkovax)"), LEFT);
     display.display(full);
 
     run_wifi_setup_portal(wifi_setup_portal_timeout);
