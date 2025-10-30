@@ -125,6 +125,8 @@ void setup()
 
   // Load all saved settings from EEPROM or program defaults
   load_config();
+  Serial.print("station ID: ");
+  Serial.println(device_id);
   SleepDuration = SleepDurationPreset;
 
   // button update logic
@@ -546,8 +548,6 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
   Serial.print("hardware MAC: ");
   Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n",
                 hw_mac[0], hw_mac[1], hw_mac[2], hw_mac[3], hw_mac[4], hw_mac[5]);
-  Serial.print("station ID: ");
-  Serial.println(mac_hash32(hw_mac));
 
   // If a valid unicast MAC (not all 00, not all FF, LSB of first byte not multicast), set it.
   auto valid_unicast_mac = [](const uint8_t *m)
@@ -590,12 +590,22 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
     }
     else
     {
-      Serial.print("Set MAC success: ");
+      Serial.print("setting MAC success: ");
     }
   }
-  else
+  else if (!mac_equal(mac, hw_mac))
   {
-    Serial.print("Using hardware MAC: ");
+    Serial.print("reverting to hardware MAC: ");
+    //save also to eeprom
+    char mac_c[18];
+    snprintf(mac_c, sizeof(mac_c),
+             "%02X:%02X:%02X:%02X:%02X:%02X",
+             hw_mac[0], hw_mac[1], hw_mac[2], hw_mac[3], hw_mac[4], hw_mac[5]);
+    eeprom_write_string(MAC_ADDR, String(mac_c), sizeof(mac_c));
+    eeprom_commit();
+  }
+  else{
+    Serial.print("using hardware MAC: ");
   }
 
   // Verify MAC address

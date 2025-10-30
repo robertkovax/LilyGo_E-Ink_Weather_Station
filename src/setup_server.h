@@ -12,7 +12,8 @@ extern char weatherServer[];
 
 extern char ssid[64];
 extern char password[64];
-extern char MAC[32];
+extern char MAC[18];
+extern uint32_t device_id;
 extern char apikey[64];
 extern char LAT[32];
 extern char LON[32];
@@ -21,8 +22,8 @@ extern char Hemisphere[32];
 extern char Units[8];
 extern char Timezone[32];
 extern char ntpServer[32];
-extern int gmtOffset_hour;
-extern int daylightOffset_hour;
+extern uint32_t gmtOffset_hour;
+extern uint32_t daylightOffset_hour;
 
 
 #define EEPROM_SIZE 1024
@@ -59,10 +60,15 @@ void run_wifi_setup_portal(uint32_t portalTimeoutMinutes);
 // Loads credentials and config from EEPROM or owm_credentials.h
 void load_config();
 
-uint32_t mac_hash32(const uint8_t _mac[6]);
-
+//eeprom helpers
 String eeprom_read_string(int addr, int maxlen);
-
+void eeprom_write_string(int addr, const String &value, int maxlen);
+void eeprom_write_u32(int address, uint32_t value);
+uint32_t eeprom_read_u32(int address);
 void erase_eeprom(int eeprom_size, byte value);
+void eeprom_commit();
+
+//hash function for deriving device ID
+uint32_t mac_hash32(const uint8_t _mac[6]);
 
 #endif // WIFI_SETUP_H

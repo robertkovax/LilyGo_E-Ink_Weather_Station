@@ -13,7 +13,6 @@
 #include "esp_wifi.h"
 #include <WebServer.h>
 
-uint32_t device_id;
 WebServer wifiServer(80);
 
 // time setup for the ESP32 internal clock (the weather data already contains the timestamps)
@@ -32,7 +31,8 @@ char weatherServer[] = "api.openweathermap.org";
 // wifi credentials
 char ssid[64] = "";
 char password[64] = "";
-char MAC[32] = "";
+char MAC[18] = "";
+uint32_t device_id;
 // API Key
 char apikey[64] = ""; // Use your own API key by signing up for a free developer account at https://openweathermap.org/
 // Location data
@@ -42,8 +42,8 @@ char Units[8] = "M";         // M = metric, else imperial
 char Location_name[32] = ""; // only for display purpose
 // Choose your time zone from: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 char Timezone[32] = "CET-1CEST,M3.5.0,M10.5.0/3"; // central EU
-int gmtOffset_hour = 1;                           //  in hous
-int daylightOffset_hour = 1;                      // in hours
+uint32_t gmtOffset_hour = 1;                           //  in hous
+uint32_t daylightOffset_hour = 1;                      // in hours
 
 // ----------------------------------------------- defaults end -----------------------------------------------------
 
@@ -84,6 +84,10 @@ uint32_t eeprom_read_u32(int address)
   return value;
 }
 
+void eeprom_commit(){
+  EEPROM.commit();
+}
+
 uint32_t mac_hash32(const uint8_t _mac[6])
 {
   uint32_t hash = 2166136261u; // FNV-1a offset basis
@@ -105,8 +109,10 @@ void load_config()
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized)
   {
-    erase_eeprom(EEPROM_SIZE, 0x00); // first fill all with 00
-                                     // get hardware MAC address as default
+    // first fill all with 00
+    erase_eeprom(EEPROM_SIZE, 0x00); 
+    
+    // get hardware MAC address as default
     uint8_t mac[6];
     WiFi.mode(WIFI_STA);
     esp_wifi_get_mac(WIFI_IF_STA, mac);
@@ -117,14 +123,14 @@ void load_config()
     eeprom_write_string(MAC_ADDR, String(mac_chr), sizeof(mac_chr));
     device_id = mac_hash32(mac);
     eeprom_write_u32(DEVICE_ID_ADDR, device_id);
-    eeprom_write_string(SSID_ADDR, String(::ssid), 64);
-    eeprom_write_string(PASS_ADDR, String(::password), 64);
-    eeprom_write_string(APIKEY_ADDR, String(::apikey), 64);
-    eeprom_write_string(LAT_ADDR, String(::LAT), 32);
-    eeprom_write_string(LON_ADDR, String(::LON), 32);
-    eeprom_write_string(LOCATION_ADDR, String(::Location_name), 32);
-    eeprom_write_string(UNITS_ADDR, String(::Units), 8);
-    eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
+    eeprom_write_string(SSID_ADDR, String(::ssid), sizeof(ssid));
+    eeprom_write_string(PASS_ADDR, String(::password), sizeof(password));
+    eeprom_write_string(APIKEY_ADDR, String(::apikey), sizeof(apikey));
+    eeprom_write_string(LAT_ADDR, String(::LAT), sizeof(LAT));
+    eeprom_write_string(LON_ADDR, String(::LON), sizeof(LON));
+    eeprom_write_string(LOCATION_ADDR, String(::Location_name), sizeof(Location_name));
+    eeprom_write_string(UNITS_ADDR, String(::Units), sizeof(Units));
+    eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), sizeof(Timezone));
     eeprom_write_u32(GMTOFFSET_ADDR, gmtOffset_hour);
     eeprom_write_u32(DAYLIGHT_ADDR, daylightOffset_hour);
     eeprom_write_u32(SLEEPDURATION_ADDR, SleepDurationPreset);
@@ -132,23 +138,23 @@ void load_config()
     EEPROM.commit();
   }
   // Load all config from EEPROM
-  String mac_str = eeprom_read_string(MAC_ADDR, 32);
+  String mac_str = eeprom_read_string(MAC_ADDR, sizeof(MAC));
   mac_str.toCharArray(MAC, sizeof(MAC));
-  String ssid_str = eeprom_read_string(SSID_ADDR, 64);
+  String ssid_str = eeprom_read_string(SSID_ADDR, sizeof(ssid));
   ssid_str.toCharArray(ssid, sizeof(ssid));
-  String pass_str = eeprom_read_string(PASS_ADDR, 64);
+  String pass_str = eeprom_read_string(PASS_ADDR, sizeof(password));
   pass_str.toCharArray(password, sizeof(password));
-  String apikey_str = eeprom_read_string(APIKEY_ADDR, 64);
+  String apikey_str = eeprom_read_string(APIKEY_ADDR, sizeof(apikey));
   apikey_str.toCharArray(apikey, sizeof(apikey));
-  String lat_str = eeprom_read_string(LAT_ADDR, 32);
+  String lat_str = eeprom_read_string(LAT_ADDR, sizeof(LAT));
   lat_str.toCharArray(LAT, sizeof(LAT));
-  String lon_str = eeprom_read_string(LON_ADDR, 32);
+  String lon_str = eeprom_read_string(LON_ADDR, sizeof(LON));
   lon_str.toCharArray(LON, sizeof(LON));
-  String location_str = eeprom_read_string(LOCATION_ADDR, 32);
+  String location_str = eeprom_read_string(LOCATION_ADDR, sizeof(Location_name));
   location_str.toCharArray(Location_name, sizeof(Location_name));
-  String units_str = eeprom_read_string(UNITS_ADDR, 8);
+  String units_str = eeprom_read_string(UNITS_ADDR, sizeof(Units));
   units_str.toCharArray(Units, sizeof(Units));
-  String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
+  String timezone_str = eeprom_read_string(TIMEZONE_ADDR, sizeof(Timezone));
   timezone_str.toCharArray(Timezone, sizeof(Timezone));
   gmtOffset_hour = eeprom_read_u32(GMTOFFSET_ADDR);
   daylightOffset_hour = eeprom_read_u32(DAYLIGHT_ADDR);
@@ -429,18 +435,18 @@ void handle_wifi_root()
 {
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi</legend>";
-  String ssid_val = eeprom_read_string(SSID_ADDR, 64);
-  String mac_str = eeprom_read_string(MAC_ADDR, 32);
+  String ssid_val = eeprom_read_string(SSID_ADDR, sizeof(ssid));
+  String mac_str = eeprom_read_string(MAC_ADDR, sizeof(MAC));
   form += html_input("ssid", ssid_val, false, nullptr, nullptr);
   form += html_input("pass", "", true, nullptr, nullptr);
   form += html_input("MAC address", mac_str, false, "MAC address", "e.g. 96:e1:33:e9:02:f4, (default / empty = hardware MAC)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Location</legend>";
-  String lat_val = eeprom_read_string(LAT_ADDR, 32);
-  String lon_val = eeprom_read_string(LON_ADDR, 32);
-  String location_val = eeprom_read_string(LOCATION_ADDR, 32);
-  String units_val = eeprom_read_string(UNITS_ADDR, 8);
-  String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
+  String lat_val = eeprom_read_string(LAT_ADDR, sizeof(LAT));
+  String lon_val = eeprom_read_string(LON_ADDR, sizeof(LON));
+  String location_val = eeprom_read_string(LOCATION_ADDR, sizeof(Location_name));
+  String units_val = eeprom_read_string(UNITS_ADDR, sizeof(Units));
+  String timezone_val = eeprom_read_string(TIMEZONE_ADDR, sizeof(Timezone));
   String gmtoffset_val = String(eeprom_read_u32(GMTOFFSET_ADDR));
   String daylight_val = String(eeprom_read_u32(DAYLIGHT_ADDR));
   String sleepduration_val = String(eeprom_read_u32(SLEEPDURATION_ADDR));
@@ -456,7 +462,7 @@ void handle_wifi_root()
   form += html_input("sleepduration", sleepduration_val, false, "update every [min]", "(default: 60 min)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>OpenWeatherMap API</legend>";
-  String apikey_val = eeprom_read_string(APIKEY_ADDR, 64);
+  String apikey_val = eeprom_read_string(APIKEY_ADDR, sizeof(apikey));
   form += html_input("apikey", apikey_val, false, "apikey 2.5", "register for free api key at: <a href='https://home.openweathermap.org' target='_blank'> https://home.openweathermap.org</a>");
   form += "</fieldset>";
   String html = String(wifi_form_html_template);
@@ -488,47 +494,47 @@ void handle_wifi_save()
     if (field == "ssid" && wifiServer.hasArg("ssid"))
     {
       Serial.println("Saving SSID: " + wifiServer.arg("ssid"));
-      eeprom_write_string(SSID_ADDR, wifiServer.arg("ssid"), 64);
+      eeprom_write_string(SSID_ADDR, wifiServer.arg("ssid"), sizeof(ssid));
     }
     if (field == "pass" && wifiServer.hasArg("pass"))
     {
       Serial.println("Saving password: " + wifiServer.arg("pass"));
-      eeprom_write_string(PASS_ADDR, wifiServer.arg("pass"), 64);
+      eeprom_write_string(PASS_ADDR, wifiServer.arg("pass"), sizeof(password));
     }
     if (field == "MAC address" && wifiServer.hasArg("MAC address"))
     {
       Serial.println("Saving MAC: " + wifiServer.arg("MAC address"));
-      eeprom_write_string(MAC_ADDR, wifiServer.arg("MAC address"), 64);
+      eeprom_write_string(MAC_ADDR, wifiServer.arg("MAC address"), sizeof(MAC));
     }
     if (field == "apikey" && wifiServer.hasArg("apikey"))
     {
       Serial.println("Saving API key: " + wifiServer.arg("apikey"));
-      eeprom_write_string(APIKEY_ADDR, wifiServer.arg("apikey"), 64);
+      eeprom_write_string(APIKEY_ADDR, wifiServer.arg("apikey"), sizeof(apikey));
     }
     if (field == "lat" && wifiServer.hasArg("lat"))
     {
       Serial.println("Saving Latitude: " + wifiServer.arg("lat"));
-      eeprom_write_string(LAT_ADDR, wifiServer.arg("lat"), 32);
+      eeprom_write_string(LAT_ADDR, wifiServer.arg("lat"), sizeof(LAT));
     }
     if (field == "lon" && wifiServer.hasArg("lon"))
     {
       Serial.println("Saving Longitude: " + wifiServer.arg("lon"));
-      eeprom_write_string(LON_ADDR, wifiServer.arg("lon"), 32);
+      eeprom_write_string(LON_ADDR, wifiServer.arg("lon"), sizeof(LON));
     }
     if (field == "location" && wifiServer.hasArg("location"))
     {
       Serial.println("Saving location: " + wifiServer.arg("location"));
-      eeprom_write_string(LOCATION_ADDR, wifiServer.arg("location"), 32);
+      eeprom_write_string(LOCATION_ADDR, wifiServer.arg("location"), sizeof(Location_name));
     }
     if (field == "units" && wifiServer.hasArg("units"))
     {
       Serial.println("Saving Units: " + wifiServer.arg("units"));
-      eeprom_write_string(UNITS_ADDR, wifiServer.arg("units"), 8);
+      eeprom_write_string(UNITS_ADDR, wifiServer.arg("units"), sizeof(Units));
     }
     if (field == "timezone" && wifiServer.hasArg("timezone"))
     {
       Serial.println("Saving Timezone: " + wifiServer.arg("timezone"));
-      eeprom_write_string(TIMEZONE_ADDR, wifiServer.arg("timezone"), 32);
+      eeprom_write_string(TIMEZONE_ADDR, wifiServer.arg("timezone"), sizeof(Timezone));
     }
     if (field == "gmtoffset" && wifiServer.hasArg("gmtoffset"))
     {
