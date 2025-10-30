@@ -719,7 +719,9 @@ void BeginSleep(long _sleepDuration)
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Entering " + String(_sleepDuration + random_fetch_delay_s) + "-secs of sleep");
+  Serial.println("Entering " + String(_sleepDuration) + "-secs of sleep");
+  //Serial.println("+ random delay: " + String(random_fetch_delay_s) + "s");
+
   delay(1000);
   esp_deep_sleep_start(); // Sleep for e.g. 30 minutes
 }
