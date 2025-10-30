@@ -4,3 +4,4 @@
 .vscode/launch.json
 .vscode/ipch
 src/owm_credentials.cpp
+*.ino.cpp
