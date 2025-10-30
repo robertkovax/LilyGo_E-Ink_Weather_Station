@@ -102,6 +102,7 @@ int SleepDurationPreset = 60; // default, it will be overwritten in load_config(
 int SleepDuration;
 int SleepTime = 23; // Sleep after (23+1) 00:00 to save battery power
 int WakeupTime = 0; // Don't wakeup until after 07:00 to save battery power
+int random_fetch_delay_s;
 int wifi_setup_portal_timeout = 15;
 
 // ############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
@@ -122,6 +123,8 @@ void setup()
   Serial.begin(115200);
   Serial.println("\n~~~~~~~~~~~~~~~~~~~~~~~");
   Serial.println("Weather station active!");
+  randomSeed(esp_random());
+  random_fetch_delay_s = random(0, 120); //add a random window for avoiding network congestion in case of multiple devices
 
   // Load all saved settings from EEPROM or program defaults
   load_config();
@@ -710,13 +713,13 @@ void BeginSleep(long _sleepDuration)
     _sleepDuration = _sleepDuration * 60;
   else
     _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); // Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((_sleepDuration + 0) * 1000000LL);                              // Added 0-sec extra delay to cater for slow ESP32 RTC timers
+  esp_sleep_enable_timer_wakeup((_sleepDuration + random_fetch_delay_s) * 1000000LL);                              // Added 0-sec extra delay to cater for slow ESP32 RTC timers
 #ifdef BUILTIN_LED
   pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
-  Serial.println("Entering " + String(_sleepDuration) + "-secs of sleep");
+  Serial.println("Entering " + String(_sleepDuration + random_fetch_delay_s) + "-secs of sleep");
   delay(1000);
   esp_deep_sleep_start(); // Sleep for e.g. 30 minutes
 }
