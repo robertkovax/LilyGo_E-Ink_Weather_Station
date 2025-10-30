@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 #include <WebServer.h>
 
+uint32_t device_id;
 WebServer wifiServer(80);
 
 // time setup for the ESP32 internal clock (the weather data already contains the timestamps)
@@ -27,9 +28,7 @@ char ntpServer[32] = "pool.ntp.org";
 //                https://api.openweathermap.org/data/2.5/forecast?lat=52.50&lon=13.40&appid=6e3ebdb485176f42f2c77ac171f89677&mode=json&units=metric&lang=EN
 char weatherServer[] = "api.openweathermap.org";
 
-// --------------------------------- variable to set as defaults in EEPROM -------------------------------------------
-// -----------------------------(these can be updated via the setup webpage) ---------------------------------
-
+// variables to set as defaults in EEPROM (these can be updated via the setup webpage)
 // wifi credentials
 char ssid[64] = "";
 char password[64] = "";
@@ -56,6 +55,7 @@ void eeprom_write_string(int addr, const String &value, int maxlen)
     EEPROM.write(addr + i, i < value.length() ? value[i] : 0);
   }
 }
+
 String eeprom_read_string(int addr, int maxlen)
 {
   char buf[128] = {0};
@@ -64,6 +64,36 @@ String eeprom_read_string(int addr, int maxlen)
   String s = String(buf);
   s.trim();
   return s;
+}
+
+void eeprom_write_u32(int address, uint32_t value)
+{
+  for (int i = 0; i < 4; i++)
+  {
+    EEPROM.write(address + i, (uint8_t)((value >> (8 * i)) & 0xFF));
+  }
+}
+
+uint32_t eeprom_read_u32(int address)
+{
+  uint32_t value = 0;
+  for (int i = 0; i < 4; i++)
+  {
+    value |= ((uint32_t)EEPROM.read(address + i)) << (8 * i);
+  }
+  return value;
+}
+
+uint32_t mac_hash32(const uint8_t _mac[6])
+{
+  uint32_t hash = 2166136261u; // FNV-1a offset basis
+  const uint32_t prime = 16777619u;
+  for (int i = 0; i < 6; i++)
+  {
+    hash ^= _mac[i];
+    hash *= prime;
+  }
+  return hash;
 }
 
 // Load config from EEPROM or owm_credentials.h
@@ -75,15 +105,18 @@ void load_config()
   bool eeprom_initialized = (EEPROM.read(EEPROM_MARKER_ADDR) == EEPROM_MARKER_VALUE);
   if (!eeprom_initialized)
   {
-    erase_eeprom(EEPROM_SIZE, 0x00); // first fill with 00
+    erase_eeprom(EEPROM_SIZE, 0x00); // first fill all with 00
                                      // get hardware MAC address as default
     uint8_t mac[6];
+    WiFi.mode(WIFI_STA);
     esp_wifi_get_mac(WIFI_IF_STA, mac);
-    char mac_str[18]; // "AA:BB:CC:DD:EE:FF" + null
-    snprintf(mac_str, sizeof(mac_str),
+    char mac_chr[18]; // "AA:BB:CC:DD:EE:FF" + null
+    snprintf(mac_chr, sizeof(mac_chr),
              "%02X:%02X:%02X:%02X:%02X:%02X",
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    eeprom_write_string(MAC_ADDR, String(mac_str), 32);
+    eeprom_write_string(MAC_ADDR, String(mac_chr), sizeof(mac_chr));
+    device_id = mac_hash32(mac);
+    eeprom_write_u32(DEVICE_ID_ADDR, device_id);
     eeprom_write_string(SSID_ADDR, String(::ssid), 64);
     eeprom_write_string(PASS_ADDR, String(::password), 64);
     eeprom_write_string(APIKEY_ADDR, String(::apikey), 64);
@@ -92,18 +125,9 @@ void load_config()
     eeprom_write_string(LOCATION_ADDR, String(::Location_name), 32);
     eeprom_write_string(UNITS_ADDR, String(::Units), 8);
     eeprom_write_string(TIMEZONE_ADDR, String(::Timezone), 32);
-    EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((::gmtOffset_hour >> 0) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR + 1, (uint8_t)((::gmtOffset_hour >> 8) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR + 2, (uint8_t)((::gmtOffset_hour >> 16) & 0xFF));
-    EEPROM.write(GMTOFFSET_ADDR + 3, (uint8_t)((::gmtOffset_hour >> 24) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((::daylightOffset_hour >> 0) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR + 1, (uint8_t)((::daylightOffset_hour >> 8) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR + 2, (uint8_t)((::daylightOffset_hour >> 16) & 0xFF));
-    EEPROM.write(DAYLIGHT_ADDR + 3, (uint8_t)((::daylightOffset_hour >> 24) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((SleepDurationPreset >> 0) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR + 1, (uint8_t)((SleepDurationPreset >> 8) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR + 2, (uint8_t)((SleepDurationPreset >> 16) & 0xFF));
-    EEPROM.write(SLEEPDURATION_ADDR + 3, (uint8_t)((SleepDurationPreset >> 24) & 0xFF));
+    eeprom_write_u32(GMTOFFSET_ADDR, gmtOffset_hour);
+    eeprom_write_u32(DAYLIGHT_ADDR, daylightOffset_hour);
+    eeprom_write_u32(SLEEPDURATION_ADDR, SleepDurationPreset);
     EEPROM.write(EEPROM_MARKER_ADDR, EEPROM_MARKER_VALUE); // Set marker
     EEPROM.commit();
   }
@@ -126,9 +150,10 @@ void load_config()
   units_str.toCharArray(Units, sizeof(Units));
   String timezone_str = eeprom_read_string(TIMEZONE_ADDR, 32);
   timezone_str.toCharArray(Timezone, sizeof(Timezone));
-  gmtOffset_hour = EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR + 1) << 8) | (EEPROM.read(GMTOFFSET_ADDR + 2) << 16) | (EEPROM.read(GMTOFFSET_ADDR + 3) << 24);
-  daylightOffset_hour = EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR + 1) << 8) | (EEPROM.read(DAYLIGHT_ADDR + 2) << 16) | (EEPROM.read(DAYLIGHT_ADDR + 3) << 24);
-  SleepDurationPreset = EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR + 1) << 8) | (EEPROM.read(SLEEPDURATION_ADDR + 2) << 16) | (EEPROM.read(SLEEPDURATION_ADDR + 3) << 24);
+  gmtOffset_hour = eeprom_read_u32(GMTOFFSET_ADDR);
+  daylightOffset_hour = eeprom_read_u32(DAYLIGHT_ADDR);
+  SleepDurationPreset = eeprom_read_u32(SLEEPDURATION_ADDR);
+  device_id = eeprom_read_u32(DEVICE_ID_ADDR);
 }
 
 // Helper to get current config value for HTML
@@ -326,8 +351,11 @@ const char *wifi_form_html_template = R"rawliteral(
       <button type='submit'>Apply and Reboot</button>
     </form>
     <div class="footer">
-      &copy; 2025 Robert Kovacs (<a href="https://www.robertkovax.com" target="_blank">www.robertkovax.com</a>)
-      <br>source: <a href="https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station" target="_blank">https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station</a>
+      Station ID: __STATION_ID__ 
+      <br>Firmware v__FW_VERSION__
+      <br>&copy; 2025 Robert Kovacs (<a href="https://www.robertkovax.com" target="_blank">www.robertkovax.com</a>)
+      <br>Source: <a href="https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station" target="_blank">https://github.com/robertkovax/LilyGo_E-Ink_Weather_Station</a>
+      
     </div>
   </div>
 </body>
@@ -392,6 +420,8 @@ void handle_popups_root()
   form += "<form action='/' method='GET' class='btn-group'><button type='submit'>Back to Setup</button></form>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
+  html.replace("__STATION_ID__", String(device_id));
+  html.replace("__FW_VERSION__", String(fw_version_major) + "." + String(fw_version_minor));
   wifiServer.send(200, "text/html", html);
 }
 
@@ -403,7 +433,7 @@ void handle_wifi_root()
   String mac_str = eeprom_read_string(MAC_ADDR, 32);
   form += html_input("ssid", ssid_val, false, nullptr, nullptr);
   form += html_input("pass", "", true, nullptr, nullptr);
-  form += html_input("MAC address", mac_str, false, "device MAC address", "e.g. 96:e1:33:e9:02:f4, default = hardware MAC (empty = default)");
+  form += html_input("MAC address", mac_str, false, "MAC address", "e.g. 96:e1:33:e9:02:f4, (default / empty = hardware MAC)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Location</legend>";
   String lat_val = eeprom_read_string(LAT_ADDR, 32);
@@ -411,9 +441,9 @@ void handle_wifi_root()
   String location_val = eeprom_read_string(LOCATION_ADDR, 32);
   String units_val = eeprom_read_string(UNITS_ADDR, 8);
   String timezone_val = eeprom_read_string(TIMEZONE_ADDR, 32);
-  String gmtoffset_val = String(EEPROM.read(GMTOFFSET_ADDR) | (EEPROM.read(GMTOFFSET_ADDR + 1) << 8) | (EEPROM.read(GMTOFFSET_ADDR + 2) << 16) | (EEPROM.read(GMTOFFSET_ADDR + 3) << 24));
-  String daylight_val = String(EEPROM.read(DAYLIGHT_ADDR) | (EEPROM.read(DAYLIGHT_ADDR + 1) << 8) | (EEPROM.read(DAYLIGHT_ADDR + 2) << 16) | (EEPROM.read(DAYLIGHT_ADDR + 3) << 24));
-  String sleepduration_val = String(EEPROM.read(SLEEPDURATION_ADDR) | (EEPROM.read(SLEEPDURATION_ADDR + 1) << 8) | (EEPROM.read(SLEEPDURATION_ADDR + 2) << 16) | (EEPROM.read(SLEEPDURATION_ADDR + 3) << 24));
+  String gmtoffset_val = String(eeprom_read_u32(GMTOFFSET_ADDR));
+  String daylight_val = String(eeprom_read_u32(DAYLIGHT_ADDR));
+  String sleepduration_val = String(eeprom_read_u32(SLEEPDURATION_ADDR));
   form += html_input("lat", lat_val, false, "LAT", nullptr);
   form += html_input("lon", lon_val, false, "LON", nullptr);
   form += html_input("location", location_val, false, "location name", " the name of the place to display");
@@ -431,6 +461,8 @@ void handle_wifi_root()
   form += "</fieldset>";
   String html = String(wifi_form_html_template);
   html.replace("%s", form);
+  html.replace("__STATION_ID__", String(device_id));
+  html.replace("__FW_VERSION__", String(fw_version_major) + "." + String(fw_version_minor));
   wifiServer.send(200, "text/html", html);
 }
 
@@ -502,28 +534,19 @@ void handle_wifi_save()
     {
       long gmtOffset = wifiServer.arg("gmtoffset").toInt();
       Serial.println("Saving GMT Offset: " + String(gmtOffset));
-      EEPROM.write(GMTOFFSET_ADDR, (uint8_t)((gmtOffset >> 0) & 0xFF));
-      EEPROM.write(GMTOFFSET_ADDR + 1, (uint8_t)((gmtOffset >> 8) & 0xFF));
-      EEPROM.write(GMTOFFSET_ADDR + 2, (uint8_t)((gmtOffset >> 16) & 0xFF));
-      EEPROM.write(GMTOFFSET_ADDR + 3, (uint8_t)((gmtOffset >> 24) & 0xFF));
+      eeprom_write_u32(GMTOFFSET_ADDR, gmtOffset);
     }
     if (field == "daylight" && wifiServer.hasArg("daylight"))
     {
       int daylightOffset = wifiServer.arg("daylight").toInt();
       Serial.println("Saving Daylight Offset: " + String(daylightOffset));
-      EEPROM.write(DAYLIGHT_ADDR, (uint8_t)((daylightOffset >> 0) & 0xFF));
-      EEPROM.write(DAYLIGHT_ADDR + 1, (uint8_t)((daylightOffset >> 8) & 0xFF));
-      EEPROM.write(DAYLIGHT_ADDR + 2, (uint8_t)((daylightOffset >> 16) & 0xFF));
-      EEPROM.write(DAYLIGHT_ADDR + 3, (uint8_t)((daylightOffset >> 24) & 0xFF));
+      eeprom_write_u32(DAYLIGHT_ADDR, daylightOffset);
     }
     if (field == "sleepduration" && wifiServer.hasArg("sleepduration"))
     {
-      long val = wifiServer.arg("sleepduration").toInt();
-      Serial.println("Saving Sleep Duration: " + String(val));
-      EEPROM.write(SLEEPDURATION_ADDR, (uint8_t)((val >> 0) & 0xFF));
-      EEPROM.write(SLEEPDURATION_ADDR + 1, (uint8_t)((val >> 8) & 0xFF));
-      EEPROM.write(SLEEPDURATION_ADDR + 2, (uint8_t)((val >> 16) & 0xFF));
-      EEPROM.write(SLEEPDURATION_ADDR + 3, (uint8_t)((val >> 24) & 0xFF));
+      long sleepduration = wifiServer.arg("sleepduration").toInt();
+      Serial.println("Saving Sleep Duration: " + String(sleepduration));
+      eeprom_write_u32(SLEEPDURATION_ADDR, sleepduration);
     }
     for (int i = 0; i < 4; i++)
     {

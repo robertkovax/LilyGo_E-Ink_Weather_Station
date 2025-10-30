@@ -1,45 +1,15 @@
-/* ESP Weather Display using an EPD 2.13" Display, obtains data from Open Weather Map, decodes it and then displays it.
-   ####################################################################################################################################
-   Original software, ideas and concepts Copyright (c) David Bird 2018.
-   All rights reserved. See http://www.dsbird.org.uk
-
-   License summary:
-   - Private and non-commercial use only.
-   - Redistribution requires attribution to David Bird.
-   - Commercial use requires explicit permission.
-   - Provided "AS IS", without warranty of any kind.
-
-   Full license text is included in the original repository:
-   https://github.com/G6EJD/ESP32-e-Paper-Weather-Display
-*/
-/*
-  Modified by:
-  Robert Kovacs, 2025 (info@robertkovacs.de | https://robertkovax.com/)
-
-  --- New functionality ---
-  + Cycle through "current day", "next day" and "4-day" forecast view on button press
-  + Long-press shows 4-day forecast immediately
-  + WiFi webserver for full setup (SSID: "weather_station_wifi")
-  + Custom popup messages via /popups endpoint
-  + Low-battery warning with deep sleep protection
-  + Error messages for WiFi, battery, weather server, or time sync
-  + Improved weather icons
-  + Improved moon phase calculation
-  + Fast partial screen refreshes
-  + Adapted for Lilygo TTGO T5 V2.3_2.13 e-paper display
-
-  TO DO:
-  Update weather fetching via One Call API 3.0
-*/
-
-#include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
-#include <WiFi.h>        // Built-in
+# 1 "C:\\Users\\robert\\AppData\\Local\\Temp\\tmp2ix6tyfk"
+#include <Arduino.h>
+# 1 "C:/Users/robert/Dropbox/my_projects/ARDUINO/weather_display/Waveshare_2_13_T5_rob/src/Waveshare_2_13_T5.ino"
+# 35 "C:/Users/robert/Dropbox/my_projects/ARDUINO/weather_display/Waveshare_2_13_T5_rob/src/Waveshare_2_13_T5.ino"
+#include <ArduinoJson.h>
+#include <WiFi.h>
 #include "esp_wifi.h"
 #include "time.h"
 #include <SPI.h>
 #define ENABLE_GxEPD2_display 0
-// #include "forecast_record.h"
-// #include "owm_credentials.h"
+
+
 #include "display.h"
 #include "setup_server.h"
 #include "common.h"
@@ -47,45 +17,45 @@
 const uint8_t fw_version_major = 2;
 const uint8_t fw_version_minor = 1;
 
-// ################ DISPLAY Lilygo TTGO T5 V2.3_2.13 #######################################
-// https://github.com/lewisxhe/TTGO-EPaper-Series#board-pins
+
+
 #define SCREEN_WIDTH 250
 #define SCREEN_HEIGHT 122
 
 static const uint8_t EPD_BUSY = 4;
 static const uint8_t EPD_CS = 5;
 static const uint8_t EPD_RST = 16;
-static const uint8_t EPD_DC = 17;   // Data/Command
-static const uint8_t EPD_SCK = 18;  // CLK on pinout?
-static const uint8_t EPD_MISO = -1; // Master-In Slave-Out not used, as no data from display
+static const uint8_t EPD_DC = 17;
+static const uint8_t EPD_SCK = 18;
+static const uint8_t EPD_MISO = -1;
 static const uint8_t EPD_MOSI = 23;
 
-GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-// GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
-// GxEPD2_BW<GxEPD2_213_B73, GxEPD2_213_B73::HEIGHT> display(GxEPD2_213_B73(/*CS=D8*/ EPD_CS, /*DC=D3*/ EPD_DC, /*RST=D4*/ EPD_RST, /*BUSY=D2*/ EPD_BUSY));
+GxEPD2_BW<GxEPD2_213_BN, GxEPD2_213_BN::HEIGHT> display(GxEPD2_213_BN( EPD_CS, EPD_DC, EPD_RST, EPD_BUSY));
 
-//  #WeAct 2.13 screen module, you need to change GxEPD2_213_B73 to GxEPD2_213_B74
-U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
-// Using fonts: // u8g2_font_helvB08_tf// u8g2_font_helvB10_tf// u8g2_font_helvB12_tf// u8g2_font_helvB14_tf// u8g2_font_helvB24_tf
+
+
+
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
 
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
 const bool partial = true;
 const bool full = false;
 
-// ################ TIME VARIABLES ##########################################################
-String time_str, date_str, date_dd_mm_str; // strings to hold time and date
+
+String time_str, date_str, date_dd_mm_str;
 int wifi_signal, CurrentHour = 0, CurrentMin = 0, CurrentSec = 0;
 long StartTime = 0;
 
 typedef struct
-{ // For current Day and Day 1, 2, 3, etc
+{
   String Time;
   float High;
   float Low;
 } HL_record_type;
 
-// ################ PROGRAM VARIABLES and OBJECTS ##########################################
+
 #define max_readings 40
 uint8_t MaxReadings = max_readings;
 float pressure_readings[max_readings] = {0};
@@ -97,23 +67,46 @@ Forecast_record_type WxConditions[1];
 Forecast_record_type WxForecast[max_readings];
 HL_record_type HLReadings[max_readings];
 
-// Sleep time in minutes, aligned to the nearest minute boundary, so if 30 will always update at 00 or 30 past the hour
-int SleepDurationPreset = 60; // default, it will be overwritten in load_config() from EEPROM;
+
+int SleepDurationPreset = 60;
 int SleepDuration;
-int SleepTime = 23; // Sleep after (23+1) 00:00 to save battery power
-int WakeupTime = 0; // Don't wakeup until after 07:00 to save battery power
+int SleepTime = 23;
+int WakeupTime = 0;
 int wifi_setup_portal_timeout = 15;
 
-// ############## BUTTON, INTERRUPT, and RETAINING VARIABLES ################################
+
 #define BUTTON_PIN 39
-// #define LED_PIN    19 // this was conflicting with the display functionality, so it cannot be used
+
 RTC_DATA_ATTR volatile int8_t popup_displayed = 255;
-RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0; // Use RTC_DATA_ATTR to preserve value during deep sleep
+RTC_DATA_ATTR volatile int8_t buttonWake_cnt = 0;
+void IRAM_ATTR handleButtonInterrupt();
+void setup();
+void loop();
+void ShowTodaysWeather();
+void ShowNextDayForecast();
+void Show4DayForecast();
+void Draw_Heading_Section();
+void Draw_3hr_Forecast(int x, int y, int index);
+void Draw_Next_Day_3hr_Forecast(int x, int y, int index);
+void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth);
+void DisplayAstronomySection(int x, int y);
+void DisplayWXicon(int x, int y, String IconName, bool IconSize);
+void get_weather_data(String type);
+void getTime();
+void isSetupMode();
+void check4popups();
+void CeckBatteryAbovePercentage(byte check_percentage);
+void connect2wifi();
+void StopWiFi();
+void BeginSleep(long _sleepDuration);
+void InitialiseDisplay();
+void DisplayInitTask(void *pv);
+#line 112 "C:/Users/robert/Dropbox/my_projects/ARDUINO/weather_display/Waveshare_2_13_T5_rob/src/Waveshare_2_13_T5.ino"
 void IRAM_ATTR handleButtonInterrupt()
 {
 }
 
-// ####################################### PROGRAM ##############################################
+
 void setup()
 {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -123,49 +116,49 @@ void setup()
   Serial.println("\n~~~~~~~~~~~~~~~~~~~~~~~");
   Serial.println("Weather station active!");
 
-  // Load all saved settings from EEPROM or program defaults
+
   load_config();
   SleepDuration = SleepDurationPreset;
 
-  // button update logic
+
   const auto wakeup_cause = esp_sleep_get_wakeup_cause();
   Serial.print("Wakeup cause: ");
   switch (esp_sleep_get_wakeup_cause())
   {
-  case 0: // show main weather section
+  case 0:
     Serial.println("Power ON / reset");
     buttonWake_cnt = 0;
     break;
-  case 2: // button press - cycle through weather forecast screens
+  case 2:
     Serial.println("External interrupt (button press)");
     buttonWake_cnt++;
     break;
-  case 4: // timer wakeup - actualize main weather section
+  case 4:
     Serial.println("Timer wakeup");
     buttonWake_cnt = 0;
     break;
   }
 
-  // init display in a separate process to speed up booting
+
   xTaskCreatePinnedToCore(
       DisplayInitTask, "DispInit",
-      4096, // stack size; bump to 6144/8192 if needed
+      4096,
       NULL,
-      2, // priority (lower than your time-critical tasks)
+      2,
       &dispInitTaskHandle,
-      1 // core 1
+      1
   );
 
-  // any of the following functions may intrrupt normal startup, show a warning or splash screen and send the controller into deep sleep
+
   CeckBatteryAbovePercentage(10);
   isSetupMode();
   connect2wifi();
   getTime();
   check4popups();
-#
-  // ################################# Display content logic ########################################
-  // advance screen on every button press
-  // on long press go to 4 day forecast immediately
+
+
+
+
   const bool btnPressed = !digitalRead(BUTTON_PIN);
   if (((wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
         buttonWake_cnt <= 0 ||
@@ -182,7 +175,7 @@ void setup()
       ;
     ShowTodaysWeather();
     if (wakeup_cause == ESP_SLEEP_WAKEUP_UNDEFINED || wakeup_cause == ESP_SLEEP_WAKEUP_TIMER)
-      display.display(full); // full refresh
+      display.display(full);
     else
       display.display(partial);
     SleepDuration = SleepDurationPreset;
@@ -214,14 +207,14 @@ void setup()
   BeginSleep(SleepDuration);
 }
 
-// #########################################################################################
+
 void loop()
 {
-  // Nothing to do here, all work is done in setup()
-  // The program will go into deep sleep after setup() is completed
-  // and will wake up based on the button press or timer.
+
+
+
 }
-// #########################################################################################
+
 void ShowTodaysWeather()
 {
   Draw_Heading_Section();
@@ -231,16 +224,16 @@ void ShowTodaysWeather()
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(45, 35, "/ " + String(WxConditions[0].Humidity, 0) + "%", LEFT);
   u8g2Fonts.setFont(u8g2_font_helvB12_tf);
-  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK); // Draw width of the 5 weather forcasts
+  display.drawLine(0, 72, (5 * 43), 72, GxEPD_BLACK);
   for (int i = 0; i <= 4; i++)
   {
     Draw_3hr_Forecast(i * 43, 96, i);
   }
-  DisplayAstronomySection(142, 18); // Astronomy section Sun rise/set and Moon phase plus icon
+  DisplayAstronomySection(142, 18);
   DrawSmallWind(231, 75, WxConditions[0].Winddir, WxConditions[0].Windspeed);
   DrawPressureTrend(0, 54, WxConditions[0].Pressure, WxConditions[0].Trend);
 }
-// #########################################################################################
+
 void ShowNextDayForecast()
 {
   Draw_Heading_Section();
@@ -252,16 +245,16 @@ void ShowNextDayForecast()
   {
     Draw_Next_Day_3hr_Forecast(i * 43, 96, startIndex + i);
   }
-  display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK); // Draw width of the 5 weather forcasts
+  display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK);
   DrawSmallWind(231, 75, WxForecast[startIndex + 1].Winddir, WxForecast[startIndex + 1].Windspeed);
 }
-// #########################################################################################
+
 void Show4DayForecast()
 {
   Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 33, "4-day forecast:", LEFT);
-  int forecastStart = tomorrowStartIndex(8); // we get the low at the end of the day, possibly next morning
+  int forecastStart = tomorrowStartIndex(8);
   int maxPos = 0, minPos = 0;
   for (int DayIndex = 0; DayIndex < 4; DayIndex++)
   {
@@ -277,23 +270,23 @@ void Show4DayForecast()
       if (WxForecast[r].Low <= HLReadings[DayIndex].Low)
       {
         HLReadings[DayIndex].Low = WxForecast[r].Low;
-        minPos = r; // not used
+        minPos = r;
       }
     }
-    Draw_4_Day_Forecast(28, 85, maxPos, DayIndex, 57); // x,y coordinates, forecast number, position, spacing width
+    Draw_4_Day_Forecast(28, 85, maxPos, DayIndex, 57);
     Serial.println("Day " + String(DayIndex) + ": Max = " + String(HLReadings[DayIndex].High) + " Min = " + String(HLReadings[DayIndex].Low));
   }
 }
-// #########################################################################################
+
 void Draw_Heading_Section()
 {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
   drawString(0, 1, Location_name, LEFT);
-  drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str, RIGHT); //+ " " + time_str
+  drawStringMaxWidth(SCREEN_WIDTH, 9, SCREEN_WIDTH, date_str, RIGHT);
   DrawBattery(80, 12);
   display.drawLine(0, 11, SCREEN_WIDTH, 11, GxEPD_BLACK);
 }
-// #########################################################################################
+
 void Draw_3hr_Forecast(int x, int y, int index)
 {
   DisplayWXicon(x + 22, y + 6, WxForecast[index].Icon, SmallIcon);
@@ -304,7 +297,7 @@ void Draw_3hr_Forecast(int x, int y, int index)
   display.drawLine(x + 43, y - 24, x + 43, y - 24 + 52, GxEPD_BLACK);
   display.drawLine(x, y - 24 + 52, x + 43, y - 24 + 52, GxEPD_BLACK);
 }
-// #########################################################################################
+
 void Draw_Next_Day_3hr_Forecast(int x, int y, int index)
 {
   DisplayWXicon(x + 22, y + 3, WxForecast[index].Icon, SmallIcon);
@@ -313,7 +306,7 @@ void Draw_Next_Day_3hr_Forecast(int x, int y, int index)
   drawString(x + 16, y + 17, String(WxForecast[index].Temperature, 0) + "°", LEFT);
   display.drawLine(x + 44, y - 32, x + 44, y - 32 + 57, GxEPD_BLACK);
 }
-// #########################################################################################
+
 void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth)
 {
   x += fwidth * Dposition;
@@ -324,7 +317,7 @@ void Draw_4_Day_Forecast(int x, int y, int forecast, int Dposition, int fwidth)
   drawString(x + 16, y + 19, String(HLReadings[Dposition].High, 0) + "°/" + String(HLReadings[Dposition].Low, 0) + "°", CENTER);
   display.drawRect(x - 18, y - 30, fwidth + 1, 65, GxEPD_BLACK);
 }
-// #########################################################################################
+
 void DisplayAstronomySection(int x, int y)
 {
   u8g2Fonts.setFont(u8g2_font_helvB08_tf);
@@ -334,32 +327,32 @@ void DisplayAstronomySection(int x, int y)
   drawString(x, y + 33, MoonPhase(utc.day, utc.month, utc.year) + " " + MoonIllumination(utc.day, utc.month, utc.year, utc.hour) + "%", LEFT);
   DrawMoon(x + 62, y - 15, utc.day, utc.month, utc.year);
 }
-// #########################################################################################
+
 void DisplayWXicon(int x, int y, String IconName, bool IconSize)
 {
-  // Serial.println("Icon name: " + IconName);
+
   if (IconName == "01d" || IconName == "01n")
-    Sunny(x, y, IconSize, IconName); // Serial.println("Sunny");}
+    Sunny(x, y, IconSize, IconName);
   else if (IconName == "02d" || IconName == "02n")
-    MostlySunny(x, y, IconSize, IconName); // Serial.println("MostlySunny");}
+    MostlySunny(x, y, IconSize, IconName);
   else if (IconName == "03d" || IconName == "03n")
-    MostlyCloudy(x, y, IconSize, IconName); // Serial.println("MostlyCloudy");}
+    MostlyCloudy(x, y, IconSize, IconName);
   else if (IconName == "04d" || IconName == "04n")
-    Cloudy(x, y, IconSize, IconName); // Serial.println("Cloudy");}
+    Cloudy(x, y, IconSize, IconName);
   else if (IconName == "09d" || IconName == "09n")
-    ChanceRain(x, y, IconSize, IconName); // Serial.println("ChanceRain");}
+    ChanceRain(x, y, IconSize, IconName);
   else if (IconName == "10d" || IconName == "10n")
-    Rain(x, y, IconSize, IconName); // Serial.println("Rain");}
+    Rain(x, y, IconSize, IconName);
   else if (IconName == "11d" || IconName == "11n")
-    Tstorms(x, y, IconSize, IconName); // Serial.println("Tstorms");}
+    Tstorms(x, y, IconSize, IconName);
   else if (IconName == "13d" || IconName == "13n")
-    Snow(x, y, IconSize, IconName); // Serial.println("Snow");}
+    Snow(x, y, IconSize, IconName);
   else if (IconName == "50d" || IconName == "50n")
-    Fog(x, y, IconSize, IconName); // Serial.println("Fog");}
+    Fog(x, y, IconSize, IconName);
   else
-    Nodata(x, y, IconSize, IconName); // Serial.println("Nodata");}
+    Nodata(x, y, IconSize, IconName);
 }
-// #########################################################################################
+
 void get_weather_data(String type)
 {
   byte get_weather_cnt = 0;
@@ -398,7 +391,7 @@ void get_weather_data(String type)
   }
   Serial.println("Weather data received");
 }
-// ##########################################################################################
+
 void getTime()
 {
   byte get_time_cnt = 0;
@@ -423,12 +416,12 @@ void getTime()
     delay(500);
   }
 }
-// ##########################################################################################
+
 void isSetupMode()
 {
-  // Check for setup mode (button held at power-on)
+
   if (digitalRead(BUTTON_PIN) == LOW && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED)
-  { // Power on reset
+  {
     Serial.println("Entering setup mode!");
     while (!displayReady)
       ;
@@ -449,16 +442,16 @@ void isSetupMode()
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
     drawString(10, 60, String("going to sleep..."), LEFT);
     drawString(10, 80, String("press button to wake!"), LEFT);
-    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+    esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0);
     display.display(full);
     delay(500);
     display.powerOff();
     buttonWake_cnt = -1;
     delay(500);
-    esp_deep_sleep_start(); // no timer wakeup until button is pressed
+    esp_deep_sleep_start();
   }
 }
-// #########################################################################################
+
 void check4popups()
 {
   const int popup_msg_addrs[4] = {POPUP1_MSG_ADDR, POPUP2_MSG_ADDR, POPUP3_MSG_ADDR, POPUP4_MSG_ADDR};
@@ -468,7 +461,7 @@ void check4popups()
   {
     String popup_msg = eeprom_read_string(popup_msg_addrs[i], 48);
     String popup_date = eeprom_read_string(popup_date_addrs[i], 8);
-    // Serial.println("popup check: " + popup_msg + " - " + popup_date);
+
     if (popup_date == String(date_dd_mm_str) && popup_msg.length() > 0)
     {
       popup_found = i;
@@ -486,10 +479,10 @@ void check4popups()
         display.display(full);
         buttonWake_cnt = -1;
         popup_displayed = i;
-        esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+        esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0);
         display.powerOff();
         delay(500);
-        esp_deep_sleep_start(); // no timer wakeup until button is pressed
+        esp_deep_sleep_start();
       }
     }
   }
@@ -499,13 +492,13 @@ void check4popups()
     Serial.println("No popup message today");
   }
 }
-// #########################################################################################
+
 void CeckBatteryAbovePercentage(byte check_percentage)
 {
   uint8_t percentage = 100;
   float voltage = analogRead(35) / 4096.0 * 7.46;
   if (voltage > 1)
-  { // Only display if there is a valid reading
+  {
     percentage = 2836.9625 * pow(voltage, 4) - 43987.4889 * pow(voltage, 3) + 255233.8134 * pow(voltage, 2) - 656689.7123 * voltage + 632041.7303;
     if (voltage >= 4.20)
       percentage = 100;
@@ -528,13 +521,13 @@ void CeckBatteryAbovePercentage(byte check_percentage)
       display.display(full);
       display.powerOff();
       buttonWake_cnt = -1;
-      esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake only on button press
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0);
       delay(500);
-      esp_deep_sleep_start(); // no timer wakeup until button is pressed
+      esp_deep_sleep_start();
     }
   }
 }
-// #########################################################################################
+
 uint8_t StartWiFi(const uint8_t *mac = nullptr)
 {
   Serial.println("Connecting to WiFi SSID: " + String(ssid));
@@ -549,7 +542,7 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
   Serial.print("station ID: ");
   Serial.println(mac_hash32(hw_mac));
 
-  // If a valid unicast MAC (not all 00, not all FF, LSB of first byte not multicast), set it.
+
   auto valid_unicast_mac = [](const uint8_t *m)
   {
     if (!m)
@@ -563,7 +556,7 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
     if (all_zero || all_ff)
       return false;
     if (m[0] & 0x01)
-      return false; // multicast bit set -> not a unicast MAC
+      return false;
     return true;
   };
 
@@ -579,7 +572,7 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
 
   if (valid_unicast_mac(mac) && !mac_equal(mac, hw_mac))
   {
-    // Must stop before changing MAC on ESP32
+
     esp_wifi_stop();
     Serial.printf("setting MAC to: %02X:%02X:%02X:%02X:%02X:%02X\n",
                   mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -598,7 +591,7 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
     Serial.print("Using hardware MAC: ");
   }
 
-  // Verify MAC address
+
   uint8_t cur[6] = {};
   esp_wifi_get_mac(WIFI_IF_STA, cur);
   Serial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n",
@@ -613,33 +606,33 @@ uint8_t StartWiFi(const uint8_t *mac = nullptr)
   WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
 
-  // Return current status WITHOUT waiting
+
   return WiFi.status();
 }
-// ##########################################################################################
-// Connect with retries + UI + sleep policy. ALL waiting happens here.
+
+
 void connect2wifi()
 {
-  // Parse desired MAC
+
   uint8_t desiredMac[6] = {};
   if (sscanf(MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
              &desiredMac[0], &desiredMac[1], &desiredMac[2],
              &desiredMac[3], &desiredMac[4], &desiredMac[5]) != 6)
   {
-    memset(desiredMac, 0, sizeof(desiredMac)); // use hardware MAC
+    memset(desiredMac, 0, sizeof(desiredMac));
   }
 
   byte reconnect_cnt = 0;
-  const unsigned long attempt_timeout_ms = 15000; // full attempt window
+  const unsigned long attempt_timeout_ms = 15000;
   const unsigned long poll_ms = 500;
-  const unsigned long cooldown_ms = 800; // small pause between attempts
+  const unsigned long cooldown_ms = 800;
 
   for (;;)
   {
-    // Kick off (non-blocking)
+
     StartWiFi(desiredMac);
 
-    // Wait ONLY here: until connected OR attempt window expires
+
     unsigned long t0 = millis();
     uint8_t status = WL_IDLE_STATUS;
     Serial.print("Connecting..");
@@ -651,13 +644,13 @@ void connect2wifi()
         int wifi_signal = WiFi.RSSI();
         Serial.println("\nWiFi connected! \nlocal IP:" + WiFi.localIP().toString() +
                        "\nstrength: " + String(wifi_signal) + " dBm");
-        return; // success
+        return;
       }
       delay(poll_ms);
       Serial.print(".");
     } while ((millis() - t0) < attempt_timeout_ms);
 
-    // Attempt failed (timed out)
+
     reconnect_cnt++;
     Serial.printf("\nWiFi connection attempt %u failed (status=%d)\n", reconnect_cnt, status);
 
@@ -674,66 +667,66 @@ void connect2wifi()
       buttonWake_cnt = -1;
       delay(500);
       BeginSleep(SleepDuration);
-      return; // device will sleep
+      return;
     }
 
-    // Cooldown + hard reset of station state before next attempt
-    WiFi.disconnect(true, true); // forget connection + drop STA
-    esp_wifi_stop();             // stop driver to clear state
+
+    WiFi.disconnect(true, true);
+    esp_wifi_stop();
     delay(cooldown_ms);
   }
 }
-// #########################################################################################
+
 void StopWiFi()
 {
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
 }
-// #########################################################################################
+
 void BeginSleep(long _sleepDuration)
 {
   display.powerOff();
   StopWiFi();
-  // Enable wakeup by timer and by button (ext0)
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0); // Wake on LOW (button press)
+
+  esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_PIN, 0);
   if (_sleepDuration < 10)
     _sleepDuration = _sleepDuration * 60;
   else
-    _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec)); // Some ESP32 are too fast to maintain accurate time
-  esp_sleep_enable_timer_wakeup((_sleepDuration + 0) * 1000000LL);                              // Added 0-sec extra delay to cater for slow ESP32 RTC timers
+    _sleepDuration = (_sleepDuration * 60 - ((CurrentMin % _sleepDuration) * 60 + CurrentSec));
+  esp_sleep_enable_timer_wakeup((_sleepDuration + 0) * 1000000LL);
 #ifdef BUILTIN_LED
-  pinMode(BUILTIN_LED, INPUT); // If it's On, turn it off and some boards use GPIO-5 for SPI-SS, which remains low after screen use
+  pinMode(BUILTIN_LED, INPUT);
   digitalWrite(BUILTIN_LED, HIGH);
 #endif
   Serial.println("Awake for : " + String((millis() - StartTime) / 1000.0, 3) + "-secs");
   Serial.println("Entering " + String(_sleepDuration) + "-secs of sleep");
   delay(1000);
-  esp_deep_sleep_start(); // Sleep for e.g. 30 minutes
-}
-// #########################################################################################
-void InitialiseDisplay()
-{
-  display.init(0, false, 20); // don't enforce full update at every cold start
-  SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
-  // Use u8g2 fonts (https://github.com/olikraus/u8g2/wiki/fntlistall)
-  display.setRotation(3);                    // Use 1 or 3 for landscape modes
-  u8g2Fonts.begin(display);                  // connect u8g2 procedures to Adafruit GFX
-  u8g2Fonts.setFontMode(1);                  // use u8g2 transparent mode (this is default)
-  u8g2Fonts.setFontDirection(0);             // left to right (this is default)
-  u8g2Fonts.setForegroundColor(GxEPD_BLACK); // apply Adafruit GFX color
-  u8g2Fonts.setBackgroundColor(GxEPD_WHITE); // apply Adafruit GFX color
-  // u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-  display.setFullWindow();
-  display.fillScreen(GxEPD_WHITE);
-  display.display(partial); // fast fill
+  esp_deep_sleep_start();
 }
 
-// #########################################################################################
+void InitialiseDisplay()
+{
+  display.init(0, false, 20);
+  SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+
+  display.setRotation(3);
+  u8g2Fonts.begin(display);
+  u8g2Fonts.setFontMode(1);
+  u8g2Fonts.setFontDirection(0);
+  u8g2Fonts.setForegroundColor(GxEPD_BLACK);
+  u8g2Fonts.setBackgroundColor(GxEPD_WHITE);
+
+  display.setFullWindow();
+  display.fillScreen(GxEPD_WHITE);
+  display.display(partial);
+}
+
+
 void DisplayInitTask(void *pv)
 {
 
   InitialiseDisplay();
   Serial.println("\nDisplay init finished");
-  displayReady = true; // signal “done”
-  vTaskDelete(NULL);   // kill this task
+  displayReady = true;
+  vTaskDelete(NULL);
 }

@@ -3,6 +3,10 @@
 #define WIFI_SETUP_H
 #include <Arduino.h>
 
+extern const uint8_t fw_version_major;
+extern const uint8_t fw_version_minor;
+
+
 extern int SleepDurationPreset;
 extern char weatherServer[];
 
@@ -19,6 +23,7 @@ extern char Timezone[32];
 extern char ntpServer[32];
 extern int gmtOffset_hour;
 extern int daylightOffset_hour;
+
 
 #define EEPROM_SIZE 1024
 #define SSID_ADDR 0
@@ -46,11 +51,15 @@ extern int daylightOffset_hour;
 #define EEPROM_MARKER_ADDR 716
 #define EEPROM_MARKER_VALUE 0xA5
 
+#define DEVICE_ID_ADDR 732
+
 // Starts the WiFi setup portal (webserver)
 void run_wifi_setup_portal(uint32_t portalTimeoutMinutes);
 
 // Loads credentials and config from EEPROM or owm_credentials.h
 void load_config();
+
+uint32_t mac_hash32(const uint8_t _mac[6]);
 
 String eeprom_read_string(int addr, int maxlen);
 
