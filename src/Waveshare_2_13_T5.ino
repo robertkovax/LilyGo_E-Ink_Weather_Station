@@ -519,8 +519,8 @@ void CeckBatteryAbovePercentage(byte check_percentage)
     Serial.println("Battery: " + String(voltage) + "V");
     if (percentage <= check_percentage)
     {
-      Serial.println("critical battery level, please charge!");
-      Serial.println("Battery too low, stopping");
+      Serial.println("Low battery. Please recharge!");
+      Serial.println("Battery low, stopping");
       while (!displayReady)
         ;
       u8g2Fonts.setFont(u8g2_font_helvB14_tf);
