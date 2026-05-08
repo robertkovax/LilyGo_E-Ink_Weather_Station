@@ -70,7 +70,7 @@ U8G2_FOR_ADAFRUIT_GFX u8g2Fonts; // Select u8g2 font from here: https://github.c
 
 TaskHandle_t dispInitTaskHandle = nullptr;
 volatile bool displayReady = false;
-const bool partial = true;
+const bool partial = false;
 const bool full = false;
 
 // ################ TIME VARIABLES ##########################################################
