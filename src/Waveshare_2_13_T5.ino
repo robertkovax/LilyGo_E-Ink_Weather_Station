@@ -252,13 +252,27 @@ void ShowNextDayForecast()
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 36, "weather tomorrow:", LEFT);
   int startIndex = tomorrowStartIndex(6);
+  if (startIndex < 0)
+  {
+    u8g2Fonts.setFont(u8g2_font_helvB10_tf);
+    drawString(3, 65, "forecast unavailable", LEFT);
+    return;
+  }
+
   Serial.println("Forecast for " + String(WxForecast[startIndex].Period));
-  for (int i = 0; i <= 4; i++)
+  int visibleSlots = MaxReadings - startIndex;
+  if (visibleSlots > 5)
+    visibleSlots = 5;
+
+  for (int i = 0; i < visibleSlots; i++)
   {
     Draw_Next_Day_3hr_Forecast(i * 43, 96, startIndex + i);
   }
   display.drawLine(0, 63, (5 * 43), 63, GxEPD_BLACK); // Draw width of the 5 weather forcasts
-  DrawSmallWind(231, 75, WxForecast[startIndex + 1].Winddir, WxForecast[startIndex + 1].Windspeed);
+  int windIndex = startIndex + 1;
+  if (windIndex >= MaxReadings)
+    windIndex = MaxReadings - 1;
+  DrawSmallWind(231, 75, WxForecast[windIndex].Winddir, WxForecast[windIndex].Windspeed);
 }
 // #########################################################################################
 void Show4DayForecast()
@@ -266,27 +280,46 @@ void Show4DayForecast()
   Draw_Heading_Section();
   u8g2Fonts.setFont(u8g2_font_helvB14_tf);
   drawString(3, 33, "4-day forecast:", LEFT);
-  int forecastStart = tomorrowStartIndex(8); // we get the low at the end of the day, possibly next morning
-  int maxPos = 0, minPos = 0;
-  for (int DayIndex = 0; DayIndex < 4; DayIndex++)
+  String todayDate = LocalDateKey(0);
+  int dayCount = 0;
+
+  for (int forecastIndex = 0; forecastIndex < MaxReadings && dayCount < 4;)
   {
-    HLReadings[DayIndex].High = WxForecast[forecastStart + (8 * DayIndex)].High;
-    HLReadings[DayIndex].Low = WxForecast[forecastStart + (8 * DayIndex)].Low;
-    for (int r = forecastStart + (8 * DayIndex); r < forecastStart + (8 * (DayIndex + 1)); r++)
+    String forecastDate = ForecastDateKey(forecastIndex);
+    if (forecastDate <= todayDate)
     {
-      if (WxForecast[r].High >= HLReadings[DayIndex].High)
+      forecastIndex++;
+      continue;
+    }
+
+    int dayStart = forecastIndex;
+    int dayEnd = forecastIndex;
+    while (dayEnd + 1 < MaxReadings && ForecastDateKey(dayEnd + 1) == forecastDate)
+    {
+      dayEnd++;
+    }
+
+    HLReadings[dayCount].High = WxForecast[dayStart].High;
+    HLReadings[dayCount].Low = WxForecast[dayStart].Low;
+    int maxPos = dayStart;
+    for (int r = dayStart; r <= dayEnd; r++)
+    {
+      if (WxForecast[r].High >= HLReadings[dayCount].High)
       {
-        HLReadings[DayIndex].High = WxForecast[r].High;
+        HLReadings[dayCount].High = WxForecast[r].High;
         maxPos = r;
       }
-      if (WxForecast[r].Low <= HLReadings[DayIndex].Low)
+      if (WxForecast[r].Low <= HLReadings[dayCount].Low)
       {
-        HLReadings[DayIndex].Low = WxForecast[r].Low;
-        minPos = r; // not used
+        HLReadings[dayCount].Low = WxForecast[r].Low;
       }
     }
-    Draw_4_Day_Forecast(28, 85, maxPos, DayIndex, 57); // x,y coordinates, forecast number, position, spacing width
-    Serial.println("Day " + String(DayIndex) + ": Max = " + String(HLReadings[DayIndex].High) + " Min = " + String(HLReadings[DayIndex].Low));
+
+    Draw_4_Day_Forecast(28, 85, maxPos, dayCount, 57); // x,y coordinates, forecast number, position, spacing width
+    Serial.println("Day " + String(dayCount) + ": Max = " + String(HLReadings[dayCount].High) + " Min = " + String(HLReadings[dayCount].Low));
+
+    dayCount++;
+    forecastIndex = dayEnd + 1;
   }
 }
 // #########################################################################################
