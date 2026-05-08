@@ -171,12 +171,11 @@ void setup()
   // ################################# Display content logic ########################################
   // advance screen on every button press
   // on long press go to 4 day forecast immediately
+  delay(30); // let the button state settle after wake so long-press detection is reliable
   const bool btnPressed = !digitalRead(BUTTON_PIN);
-  if (((wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
-        buttonWake_cnt <= 0 ||
-        buttonWake_cnt >= 3) &&
-       !btnPressed) ||
-      (buttonWake_cnt == 3 && btnPressed))
+  const bool wokeByButton = wakeup_cause == ESP_SLEEP_WAKEUP_EXT0;
+
+  if (!wokeByButton)
   {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
@@ -192,18 +191,7 @@ void setup()
       display.display(partial);
     SleepDuration = SleepDurationPreset;
   }
-  else if (buttonWake_cnt == 1 && !btnPressed)
-  {
-    Serial.println("Showing next day's forecast");
-    get_weather_data("forecast");
-    StopWiFi();
-    while (!displayReady)
-      ;
-    ShowNextDayForecast();
-    display.display(partial);
-    SleepDuration = 5;
-  }
-  else if (buttonWake_cnt == ESP_SLEEP_WAKEUP_EXT0 || btnPressed)
+  else if (btnPressed || buttonWake_cnt == 2)
   {
     buttonWake_cnt = 2;
     Serial.println("Showing 4 day forecast");
@@ -214,6 +202,30 @@ void setup()
     Show4DayForecast();
     display.display(partial);
     SleepDuration = 5;
+  }
+  else if (buttonWake_cnt == 1)
+  {
+    Serial.println("Showing next day's forecast");
+    get_weather_data("forecast");
+    StopWiFi();
+    while (!displayReady)
+      ;
+    ShowNextDayForecast();
+    display.display(partial);
+    SleepDuration = 5;
+  }
+  else
+  {
+    buttonWake_cnt = 0;
+    Serial.println("Button wake fallback -> showing today's Weather");
+    get_weather_data("current");
+    get_weather_data("forecast");
+    StopWiFi();
+    while (!displayReady)
+      ;
+    ShowTodaysWeather();
+    display.display(partial);
+    SleepDuration = SleepDurationPreset;
   }
   delay(500);
   BeginSleep(SleepDuration);
