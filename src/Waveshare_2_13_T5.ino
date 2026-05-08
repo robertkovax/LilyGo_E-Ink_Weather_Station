@@ -173,12 +173,11 @@ void setup()
   // ################################# Display content logic ########################################
   // advance screen on every button press
   // on long press go to 4 day forecast immediately
+  delay(30); // let the button state settle after wake so long-press detection is reliable
   const bool btnPressed = !digitalRead(BUTTON_PIN);
-  if (((wakeup_cause == ESP_SLEEP_WAKEUP_TIMER ||
-        buttonWake_cnt <= 0 ||
-        buttonWake_cnt >= 3) &&
-       !btnPressed) ||
-      (buttonWake_cnt == 3 && btnPressed))
+  const bool wokeByButton = wakeup_cause == ESP_SLEEP_WAKEUP_EXT0;
+
+  if (!wokeByButton)
   {
     buttonWake_cnt = 0;
     Serial.println("Showing today's Weather");
@@ -194,18 +193,7 @@ void setup()
       display.display(partial);
     SleepDuration = SleepDurationPreset;
   }
-  else if (buttonWake_cnt == 1 && !btnPressed)
-  {
-    Serial.println("Showing next day's forecast");
-    get_weather_data("forecast");
-    StopWiFi();
-    while (!displayReady)
-      ;
-    ShowNextDayForecast();
-    display.display(partial);
-    SleepDuration = 5;
-  }
-  else if (buttonWake_cnt == ESP_SLEEP_WAKEUP_EXT0 || btnPressed)
+  else if (btnPressed || buttonWake_cnt == 2)
   {
     buttonWake_cnt = 2;
     Serial.println("Showing 4 day forecast");
@@ -216,6 +204,30 @@ void setup()
     Show4DayForecast();
     display.display(partial);
     SleepDuration = 5;
+  }
+  else if (buttonWake_cnt == 1)
+  {
+    Serial.println("Showing next day's forecast");
+    get_weather_data("forecast");
+    StopWiFi();
+    while (!displayReady)
+      ;
+    ShowNextDayForecast();
+    display.display(partial);
+    SleepDuration = 5;
+  }
+  else
+  {
+    buttonWake_cnt = 0;
+    Serial.println("Button wake fallback -> showing today's Weather");
+    get_weather_data("current");
+    get_weather_data("forecast");
+    StopWiFi();
+    while (!displayReady)
+      ;
+    ShowTodaysWeather();
+    display.display(partial);
+    SleepDuration = SleepDurationPreset;
   }
   delay(500);
   BeginSleep(SleepDuration);
@@ -554,14 +566,13 @@ void CeckBatteryAbovePercentage(byte check_percentage)
     Serial.println("Battery: " + String(voltage) + "V");
     if (percentage <= check_percentage)
     {
-      Serial.println("Low battery. Please recharge!");
-      Serial.println("Battery low, stopping");
+      Serial.println("Low battery voltage detected.");
       while (!displayReady)
         ;
       u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-      drawString(10, 30, String("Critical battery level..."), LEFT);
+      drawString(10, 30, String("Low battery."), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-      drawString(10, 70, String("please recharge and reboot!"), LEFT);
+      drawString(10, 70, String("Please recharge and reboot!"), LEFT);
       display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
       display.fillRect(90 + 34, 60 - 10, 2, 5, GxEPD_BLACK);
       display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
