@@ -180,20 +180,97 @@ boolean UpdateLocalTime()
   return true;
 }
 // ########################################################################################
-int tomorrowStartIndex(int preferHourStart = 6)
+static String buildDateKey(const struct tm &tm_info)
 {
-  String currentDate = WxForecast[0].Period.substring(0, 10);
+  char buffer[11];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d", &tm_info);
+  return String(buffer);
+}
+
+// ########################################################################################
+String LocalDateKey(int dayOffset)
+{
+  time_t now = time(nullptr) + (dayOffset * 86400);
+  struct tm tm_info;
+  localtime_r(&now, &tm_info);
+  return buildDateKey(tm_info);
+}
+
+// ########################################################################################
+String ForecastDateKey(int index)
+{
+  if (index < 0 || index >= MaxReadings)
+  {
+    return "";
+  }
+
+  return WxForecast[index].Period.substring(0, 10);
+}
+
+// ########################################################################################
+int ForecastHour(int index)
+{
+  if (index < 0 || index >= MaxReadings)
+  {
+    return -1;
+  }
+
+  return WxForecast[index].Period.substring(11, 13).toInt();
+}
+
+// ########################################################################################
+int forecastIndexForDate(const String &targetDate, int preferHourStart)
+{
+  int firstMatch = -1;
 
   for (int i = 0; i < MaxReadings; i++)
   {
-    String date = WxForecast[i].Period.substring(0, 10); // YYYY-MM-DD
-    int hour = WxForecast[i].Period.substring(11, 13).toInt();
-    if (date != currentDate && hour >= preferHourStart)
+    String date = ForecastDateKey(i);
+
+    if (date != targetDate)
     {
-      // First entry of the *next day* morning
+      if (firstMatch >= 0)
+      {
+        break;
+      }
+      continue;
+    }
+
+    if (firstMatch < 0)
+    {
+      firstMatch = i;
+    }
+
+    if (ForecastHour(i) >= preferHourStart)
+    {
       return i;
     }
   }
+
+  return firstMatch;
+}
+
+// ########################################################################################
+int tomorrowStartIndex(int preferHourStart)
+{
+  String tomorrowDate = LocalDateKey(1);
+  int startIndex = forecastIndexForDate(tomorrowDate, preferHourStart);
+
+  if (startIndex >= 0)
+  {
+    return startIndex;
+  }
+
+  String todayDate = LocalDateKey(0);
+  for (int i = 0; i < MaxReadings; i++)
+  {
+    String forecastDate = ForecastDateKey(i);
+    if (forecastDate > todayDate)
+    {
+      return forecastIndexForDate(forecastDate, preferHourStart);
+    }
+  }
+
   return -1;
 }
 // #########################################################################################
