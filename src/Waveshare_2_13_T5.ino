@@ -552,14 +552,13 @@ void CeckBatteryAbovePercentage(byte check_percentage)
     Serial.println("Battery: " + String(voltage) + "V");
     if (percentage <= check_percentage)
     {
-      Serial.println("Low battery. Please recharge!");
-      Serial.println("Battery low, stopping");
+      Serial.println("Low battery voltage detected.");
       while (!displayReady)
         ;
       u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-      drawString(10, 30, String("Critical battery level..."), LEFT);
+      drawString(10, 30, String("Low battery."), LEFT);
       u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-      drawString(10, 70, String("please recharge and reboot!"), LEFT);
+      drawString(10, 70, String("Please recharge and reboot!"), LEFT);
       display.drawRect(90 + 15, 60 - 12, 19, 10, GxEPD_BLACK);
       display.fillRect(90 + 34, 60 - 10, 2, 5, GxEPD_BLACK);
       display.fillRect(90 + 17, 60 - 10, 1, 6, GxEPD_BLACK);
