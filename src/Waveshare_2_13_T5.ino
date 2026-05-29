@@ -1568,41 +1568,147 @@ static String buildFallbackGrantUrl()
 {
   return buildGrantUrl(CAPTIVE_FALLBACK_GRANT_URL, CAPTIVE_CONTINUE_URL);
 }
-
+static bool isOCMP(const String &url)
+{
+  return url.indexOf("ocmp.io") >= 0 || url.indexOf("index.html") >= 0;
+}
 static bool ensureCaptivePortalAuthenticated()
 {
   if (internetIsOpen())
   {
-    Serial.println("Internet already available. No captive portal grant needed.");
+    Serial.println("Internet already available.");
     return true;
   }
 
-  Serial.println("Internet not open yet. Trying captive portal authentication...");
+  Serial.println("Captive portal detected. Attempting authentication...");
 
-  String grantUrl = discoverMerakiGrantUrl();
+  String grantUrl = discoverMerakiGrantUrl(); // may still be empty on OCMP
 
-  if (grantUrl.length() == 0)
+  // -----------------------------
+  // OCMP PATH (NEW)
+  // -----------------------------
+  if (isOCMP(captiveSplashUrl) || isOCMP(grantUrl))
   {
-    Serial.println("Could not discover fresh base_grant_url. Using fallback grant URL.");
-    grantUrl = buildFallbackGrantUrl();
-  }
+    Serial.println("OCMP-style portal detected.");
 
-  if (!callCaptiveGrantUrl(grantUrl, captiveSplashUrl))
-  {
-    Serial.println("Captive grant request failed.");
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    http.setTimeout(15000);
+
+    if (!http.begin(client, captiveSplashUrl.length() ? captiveSplashUrl : grantUrl))
+    {
+      Serial.println("OCMP: failed to open login page");
+      return false;
+    }
+
+    int code = http.GET();
+
+    if (code != HTTP_CODE_OK)
+    {
+      Serial.printf("OCMP GET failed: %d\n", code);
+      http.end();
+      return false;
+    }
+
+    String html = http.getString();
+    http.end();
+
+    // ---- extract form action ----
+    String action = "";
+
+    int a = html.indexOf("action=");
+    if (a >= 0)
+    {
+      int q1 = html.indexOf("\"", a);
+      int q2 = html.indexOf("\"", q1 + 1);
+      if (q1 > 0 && q2 > q1)
+      {
+        action = html.substring(q1 + 1, q2);
+      }
+    }
+
+    if (action.length() == 0)
+    {
+      Serial.println("OCMP: no form action found");
+      return false;
+    }
+
+    // make absolute URL
+    if (!action.startsWith("http"))
+    {
+      action = "https://zib.ocmp.io:8002" + action;
+    }
+
+    Serial.println("OCMP form action:");
+    Serial.println(action);
+
+    // ---- collect inputs (very simple parser) ----
+    String postData = "";
+
+    int pos = 0;
+    while (true)
+    {
+      int n = html.indexOf("name=\"", pos);
+      if (n < 0) break;
+
+      int n2 = html.indexOf("\"", n + 6);
+      int v = html.indexOf("value=\"", n2);
+      int v2 = html.indexOf("\"", v + 7);
+
+      if (n2 < 0 || v < 0 || v2 < 0) break;
+
+      String name = html.substring(n + 6, n2);
+      String value = html.substring(v + 7, v2);
+
+      if (postData.length()) postData += "&";
+      postData += name + "=" + value;
+
+      pos = v2;
+    }
+
+    Serial.println("OCMP POST data:");
+    Serial.println(postData);
+
+    // ---- submit login ----
+    HTTPClient http2;
+    WiFiClientSecure client2;
+    client2.setInsecure();
+
+    http2.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+    http2.begin(client2, action);
+    http2.addHeader("Content-Type", "application/x-www-form-urlencoded");
+
+    int r = http2.POST(postData);
+    http2.end();
+
+    Serial.printf("OCMP POST result: %d\n", r);
+
+    delay(2000);
+
+    if (internetIsOpen())
+    {
+      Serial.println("OCMP authentication SUCCESS");
+      return true;
+    }
+
+    Serial.println("OCMP authentication failed (still blocked)");
     return false;
   }
 
-  delay(1500);
-
-  if (internetIsOpen())
+  // -----------------------------
+  // MERAKI PATH (your old logic)
+  // -----------------------------
+  if (grantUrl.length() == 0)
   {
-    Serial.println("Captive portal authentication succeeded.");
-    return true;
+    Serial.println("No Meraki grant URL found.");
+    return false;
   }
 
-  Serial.println("Grant request completed, but internet probe still failed.");
-  return false;
+  return callCaptiveGrantUrl(grantUrl, captiveSplashUrl);
 }
 
 // ##########################################################################################
