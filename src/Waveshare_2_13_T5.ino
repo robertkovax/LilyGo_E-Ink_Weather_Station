@@ -35,7 +35,6 @@
 #include <ArduinoJson.h> // https://github.com/bblanchon/ArduinoJson
 #include <WiFi.h>        // Built-in
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include "esp_wifi.h"
 #include "time.h"
 #include <SPI.h>
