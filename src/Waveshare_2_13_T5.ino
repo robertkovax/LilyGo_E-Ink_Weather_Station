@@ -485,12 +485,13 @@ void isSetupMode()
     while (!displayReady)
       ;
     u8g2Fonts.setFont(u8g2_font_helvB14_tf);
-    drawString(10, 30, String("Setup mode"), LEFT);
+    drawString(5, 10, String("Setup mode"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB10_tf);
-    drawString(10, 60, String("connect to: 'weather_station_wifi'"), LEFT);
-    drawString(10, 80, String("open settings: http://192.168.4.1/"), LEFT);
+    drawString(5, 40, String("connect to: 'weather_station_wifi'"), LEFT);
+    drawString(5, 60, String("open setup page: http://192.168.4.1"), LEFT);
     u8g2Fonts.setFont(u8g2_font_helvB08_tf);
-    drawString(10, 110, String("source code: https://github.com/robertkovax"), LEFT);
+    drawString(5, 95, String("firmware: v") + fw_version_major + "." + fw_version_minor, LEFT);
+    drawString(5, 110, String("source code: https://github.com/robertkovax"), LEFT);
     display.display(full);
 
     run_wifi_setup_portal(wifi_setup_portal_timeout);
