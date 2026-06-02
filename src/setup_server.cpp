@@ -11,9 +11,16 @@
 #include <EEPROM.h>
 #include <WiFi.h>
 #include "esp_wifi.h"
+#include <DNSServer.h>
 #include <WebServer.h>
 
 WebServer wifiServer(80);
+DNSServer dnsServer;
+
+static const byte DNS_PORT = 53;
+static const IPAddress SETUP_AP_IP(192, 168, 4, 1);
+static const IPAddress SETUP_AP_GATEWAY(192, 168, 4, 1);
+static const IPAddress SETUP_AP_SUBNET(255, 255, 255, 0);
 
 // time setup for the ESP32 internal clock (the weather data already contains the timestamps)
 // best to use pool.ntp.org to find an NTP server then the NTP system tries to find the closest available servers
@@ -608,8 +615,10 @@ void erase_eeprom(int eeprom_size, byte erase_value)
 void run_wifi_setup_portal(uint32_t timeoutMinutes)
 {
   WiFi.mode(WIFI_AP);
+  WiFi.softAPConfig(SETUP_AP_IP, SETUP_AP_GATEWAY, SETUP_AP_SUBNET);
   WiFi.softAP("weather_station_wifi");
   delay(300);
+  dnsServer.start(DNS_PORT, "*", SETUP_AP_IP);
 
   const uint32_t timeoutMs = timeoutMinutes * 60000UL; // minutes → ms safely
   // Helper: extend deadline on any activity
@@ -633,7 +642,11 @@ void run_wifi_setup_portal(uint32_t timeoutMinutes)
   wifiServer.on("/erase_eeprom", HTTP_GET, [&]()
                 { touch(); handle_erase_eeprom(); });
   wifiServer.onNotFound([&]()
-                        { touch(); wifiServer.send(404, "text/plain", "Not found"); });
+                        {
+                          touch();
+                          wifiServer.sendHeader("Location", String("http://") + SETUP_AP_IP.toString() + "/", true);
+                          wifiServer.send(302, "text/plain", "");
+                        });
 
   wifiServer.begin();
   Serial.printf("Portal up. Timeout: %lu min\n", (unsigned long)timeoutMinutes);
@@ -642,6 +655,7 @@ void run_wifi_setup_portal(uint32_t timeoutMinutes)
   bool firstAssocTouched = false;
   for (;;)
   {
+    dnsServer.processNextRequest();
     wifiServer.handleClient();
     uint32_t now = nowMs();
     // Treat first association as "activity" (checked ~4×/s)
@@ -663,6 +677,7 @@ void run_wifi_setup_portal(uint32_t timeoutMinutes)
     }
     delay(100); // yield to WiFi/RTOS
   }
+  dnsServer.stop();
   wifiServer.stop();
   delay(20);
   WiFi.softAPdisconnect(true);

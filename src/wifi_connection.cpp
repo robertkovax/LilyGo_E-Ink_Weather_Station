@@ -117,6 +117,7 @@ static const char *ONLINE_TEST_URL = "http://www.msftconnecttest.com/connecttest
 static const char *ONLINE_TEST_BODY = "Microsoft Connect Test";
 
 static String captiveSplashUrl;
+static String captiveUrl;
 static String captiveNetworkAuthCookie;
 static String captiveSocialCookie;
 static String captiveLandingUrl;
@@ -830,6 +831,18 @@ static String discoverMerakiGrantUrl()
 
   http.end();
 
+  if (location.length() == 0)
+  {
+    return "";
+  }
+
+  location = resolveUrl(CAPTIVE_PROBE_URL, location);
+
+  if (location.indexOf("/splash/") >= 0)
+  {
+    captiveSplashUrl = location;
+  }
+
   String baseGrantUrl = getQueryParam(location, "base_grant_url");
   if (baseGrantUrl.length() == 0)
   {
@@ -998,40 +1011,659 @@ static String buildFallbackGrantUrl()
   return buildGrantUrl(CAPTIVE_FALLBACK_GRANT_URL, CAPTIVE_CONTINUE_URL);
 }
 
-static bool ensureCaptivePortalAuthenticated()
+static bool isOCMP(const String &url)
 {
-  if (internetIsOpen())
+  return url.indexOf("ocmp.io") >= 0 ||
+         url.indexOf("zib.ocmp.io") >= 0 ||
+         url.indexOf("redirurl=") >= 0 ||
+         url.indexOf("index.html") >= 0;
+}
+
+static bool httpBeginForUrl(HTTPClient &http, WiFiClient &plainClient, WiFiClientSecure &secureClient, const String &url)
+{
+  secureClient.setInsecure();
+
+  if (url.startsWith("https://"))
   {
-    Serial.println("Internet already available. No captive portal grant needed.");
-    return true;
+    return http.begin(secureClient, url);
   }
 
-  Serial.println("Internet not open yet. Trying captive portal authentication...");
+  return http.begin(plainClient, url);
+}
 
-  String grantUrl = discoverMerakiGrantUrl();
+static void printLimitedBody(const char *label, String body, size_t maxLen = 700)
+{
+  body.replace("\r", " ");
+  body.replace("\n", " ");
+  body.trim();
 
-  if (grantUrl.length() == 0)
+  Serial.print(label);
+  Serial.print(" len=");
+  Serial.println(body.length());
+
+  if (body.length() == 0)
   {
-    Serial.println("Could not discover fresh base_grant_url. Using fallback grant URL.");
-    grantUrl = buildFallbackGrantUrl();
+    return;
   }
 
-  if (!callCaptiveGrantUrl(grantUrl, captiveSplashUrl))
+  if (body.length() > maxLen)
   {
-    Serial.println("Captive grant request failed.");
+    body = body.substring(0, maxLen);
+    body += "...";
+  }
+
+  Serial.println(body);
+}
+
+static void printHtmlClue(const String &lowerBody, const String &body, const char *needle)
+{
+  int pos = lowerBody.indexOf(needle);
+  if (pos < 0)
+  {
+    return;
+  }
+
+  int start = pos > 80 ? pos - 80 : 0;
+  int end = pos + 220;
+  if (end > body.length())
+  {
+    end = body.length();
+  }
+
+  String snippet = body.substring(start, end);
+  snippet.replace("\r", " ");
+  snippet.replace("\n", " ");
+  snippet.trim();
+
+  Serial.print("OCMP clue ");
+  Serial.print(needle);
+  Serial.print(": ");
+  Serial.println(snippet);
+}
+
+static void printOCMPHtmlDiagnostics(const String &body)
+{
+  printLimitedBody("OCMP GET body", body);
+
+  String lowerBody = body;
+  lowerBody.toLowerCase();
+
+  printHtmlClue(lowerBody, body, "grant");
+  printHtmlClue(lowerBody, body, "auth");
+  printHtmlClue(lowerBody, body, "login");
+  printHtmlClue(lowerBody, body, "accept");
+  printHtmlClue(lowerBody, body, "redirurl");
+  printHtmlClue(lowerBody, body, "window.location");
+  printHtmlClue(lowerBody, body, "location.href");
+  printHtmlClue(lowerBody, body, "form");
+}
+
+static bool waitForOCMPBinding()
+{
+  Serial.println("Waiting for session propagation...");
+
+  delay(3000);
+
+  for (int i = 0; i < 5; i++)
+  {
+    if (internetIsOpen())
+    {
+      Serial.println("OCMP: internet unlocked");
+      return true;
+    }
+
+    Serial.println("OCMP: waiting for network binding...");
+    delay(2000);
+  }
+
+  return false;
+}
+
+static String callOPNsenseApi(const String &url, const String &referer, String postData = "")
+{
+  WiFiClient plainClient;
+  WiFiClientSecure secureClient;
+  HTTPClient http;
+  const char *headerKeys[] = {"Location", "Set-Cookie", "Content-Type", "Server"};
+
+  http.setConnectTimeout(15000);
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+  if (!httpBeginForUrl(http, plainClient, secureClient, url))
+  {
+    Serial.println("OPNsense API begin failed.");
+    return "";
+  }
+
+  http.collectHeaders(headerKeys, 4);
+  http.addHeader("User-Agent", "Mozilla/5.0 ESP32 captive portal");
+  http.addHeader("Accept", "application/json, text/javascript, */*; q=0.01");
+  http.addHeader("X-Requested-With", "XMLHttpRequest");
+
+  if (referer.length())
+  {
+    http.addHeader("Referer", referer);
+  }
+
+  int code;
+  if (postData.length())
+  {
+    http.addHeader("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+    http.addHeader("Content-Length", String(postData.length()));
+    code = http.POST(postData);
+  }
+  else
+  {
+    code = http.GET();
+  }
+
+  String location = http.header("Location");
+  String setCookie = http.header("Set-Cookie");
+  String contentType = http.header("Content-Type");
+  String server = http.header("Server");
+  String body = http.getString();
+
+  Serial.printf("OPNsense API result: %d\n", code);
+  Serial.print("OPNsense API URL: ");
+  Serial.println(url);
+  Serial.print("OPNsense API Content-Type: ");
+  Serial.println(contentType);
+  Serial.print("OPNsense API Server: ");
+  Serial.println(server);
+
+  if (location.length())
+  {
+    Serial.println("OPNsense API redirect:");
+    Serial.println(resolveUrl(url, location));
+  }
+  else
+  {
+    Serial.println("OPNsense API redirect: <none>");
+  }
+
+  if (setCookie.length())
+  {
+    Serial.println("OPNsense API Set-Cookie captured");
+  }
+  else
+  {
+    Serial.println("OPNsense API Set-Cookie: <none>");
+  }
+
+  printLimitedBody("OPNsense API body", body);
+  http.end();
+  return body;
+}
+
+static bool tryOPNsenseAnonymousLogon(const String &origin, const String &referer)
+{
+  Serial.println("OPNsense portal detected -> trying anonymous API logon");
+
+  String statusUrl = origin + "/api/captiveportal/access/status/";
+  String logonUrl = origin + "/api/captiveportal/access/logon/";
+
+  Serial.println("OPNsense status before logon:");
+  callOPNsenseApi(statusUrl, referer);
+
+  Serial.println("OPNsense anonymous logon:");
+  String body = callOPNsenseApi(logonUrl, referer, "user=&password=");
+
+  if (body.indexOf("\"AUTHORIZED\"") >= 0 ||
+      body.indexOf("'AUTHORIZED'") >= 0)
+  {
+    Serial.println("OPNsense API reports AUTHORIZED");
+    if (waitForOCMPBinding())
+    {
+      return true;
+    }
+  }
+  else
+  {
+    Serial.println("OPNsense API did not report AUTHORIZED");
+  }
+
+  Serial.println("OPNsense status after logon:");
+  callOPNsenseApi(statusUrl, referer);
+
+  return waitForOCMPBinding();
+}
+
+static bool postOCMPAccept(const String &action, const String &referer, const String &postData, String &cookieJar)
+{
+  WiFiClient plainClient;
+  WiFiClientSecure secureClient;
+  HTTPClient http;
+  const char *headerKeys[] = {"Location", "Set-Cookie", "Content-Type", "Server"};
+
+  http.setConnectTimeout(15000);
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+  if (!httpBeginForUrl(http, plainClient, secureClient, action))
+  {
+    Serial.println("OCMP: failed to open post action");
     return false;
   }
 
-  delay(1500);
+  http.collectHeaders(headerKeys, 4);
+  http.addHeader("User-Agent", "Mozilla/5.0 ESP32 captive portal");
+  http.addHeader("Referer", referer);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  http.addHeader("Content-Length", String(postData.length()));
 
+  if (cookieJar.length())
+  {
+    http.addHeader("Cookie", cookieJar);
+  }
+
+  int code = http.POST(postData);
+  String location = http.header("Location");
+  String setCookie = http.header("Set-Cookie");
+  String contentType = http.header("Content-Type");
+  String server = http.header("Server");
+  int contentLength = http.getSize();
+  String responseBody = http.getString();
+
+  if (setCookie.length())
+  {
+    storeSetCookieInJar(cookieJar, setCookie);
+  }
+
+  Serial.printf("OCMP POST result: %d\n", code);
+  Serial.print("OCMP POST Content-Type: ");
+  Serial.println(contentType);
+  Serial.print("OCMP POST Server: ");
+  Serial.println(server);
+  Serial.printf("OCMP POST Content-Length: %d\n", contentLength);
+
+  if (location.length())
+  {
+    Serial.println("OCMP POST redirect:");
+    Serial.println(resolveUrl(action, location));
+  }
+  else
+  {
+    Serial.println("OCMP POST redirect: <none>");
+  }
+
+  if (setCookie.length())
+  {
+    Serial.println("OCMP POST Set-Cookie captured");
+  }
+  else
+  {
+    Serial.println("OCMP POST Set-Cookie: <none>");
+  }
+
+  printLimitedBody("OCMP POST body", responseBody);
+  http.end();
+
+  Serial.println("OCMP POST completed. Re-checking network...");
+  return waitForOCMPBinding();
+}
+
+static bool handleOCMP(const String &url)
+{
+  Serial.println("OCMP authentication starting...");
+
+  if (url.length() == 0)
+  {
+    Serial.println("OCMP: no portal URL");
+    return false;
+  }
+
+  String currentUrl = url;
+  String html = "";
+  String cookieJar = "";
+
+  for (byte hop = 0; hop < 4; hop++)
+  {
+    WiFiClient plainClient;
+    WiFiClientSecure secureClient;
+    HTTPClient http;
+    const char *headerKeys[] = {"Location", "Set-Cookie", "Content-Type", "Server"};
+
+    http.setConnectTimeout(15000);
+    http.setTimeout(15000);
+    http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+    if (!httpBeginForUrl(http, plainClient, secureClient, currentUrl))
+    {
+      Serial.println("OCMP: failed to open portal");
+      return false;
+    }
+
+    http.collectHeaders(headerKeys, 4);
+    http.addHeader("User-Agent", "Mozilla/5.0 ESP32 captive portal");
+
+    if (cookieJar.length())
+    {
+      http.addHeader("Cookie", cookieJar);
+    }
+
+    int code = http.GET();
+    String location = http.header("Location");
+    String setCookie = http.header("Set-Cookie");
+    String contentType = http.header("Content-Type");
+    String server = http.header("Server");
+
+    Serial.printf("OCMP GET result: %d\n", code);
+    Serial.print("OCMP GET Content-Type: ");
+    Serial.println(contentType);
+    Serial.print("OCMP GET Server: ");
+    Serial.println(server);
+    if (location.length())
+    {
+      Serial.println("OCMP GET Location:");
+      Serial.println(resolveUrl(currentUrl, location));
+    }
+    else
+    {
+      Serial.println("OCMP GET Location: <none>");
+    }
+
+    if (setCookie.length())
+    {
+      Serial.println("OCMP: initial cookie captured");
+      storeSetCookieInJar(cookieJar, setCookie);
+    }
+    else
+    {
+      Serial.println("OCMP: WARNING no Set-Cookie in splash GET");
+    }
+
+    if (isRedirectStatus(code) && location.length())
+    {
+      currentUrl = resolveUrl(currentUrl, location);
+      Serial.println("OCMP redirect:");
+      Serial.println(currentUrl);
+      http.end();
+      delay(300);
+      continue;
+    }
+
+    if (code != HTTP_CODE_OK)
+    {
+      Serial.printf("OCMP GET failed: %d\n", code);
+      http.end();
+      return false;
+    }
+
+    html = http.getString();
+    printOCMPHtmlDiagnostics(html);
+    http.end();
+    break;
+  }
+
+  if (html.length() == 0)
+  {
+    Serial.println("OCMP: empty login page");
+    return false;
+  }
+
+  String lowerHtml = html;
+  lowerHtml.toLowerCase();
+  String portalOrigin = getUrlOrigin(currentUrl);
+
+  if (lowerHtml.indexOf("/api/captiveportal/access/logon/") >= 0 ||
+      lowerHtml.indexOf("opnsense") >= 0)
+  {
+    if (tryOPNsenseAnonymousLogon(portalOrigin, currentUrl))
+    {
+      Serial.println("OPNsense captive portal authentication SUCCESS");
+      return true;
+    }
+
+    Serial.println("OPNsense API logon did not unlock internet; falling back to generic OCMP POST");
+  }
+
+  String action = "";
+  int formStart = lowerHtml.indexOf("<form");
+  int formTagEnd = formStart >= 0 ? html.indexOf('>', formStart) : -1;
+
+  Serial.printf("OCMP form tag position: %d\n", formStart);
+
+  if (formStart >= 0 && formTagEnd > formStart)
+  {
+    String formTag = html.substring(formStart, formTagEnd + 1);
+    printLimitedBody("OCMP form tag", formTag, 350);
+    action = getHtmlAttr(formTag, "action");
+  }
+
+  if (action.length() == 0)
+  {
+    int a = html.indexOf("action=");
+    if (a >= 0)
+    {
+      int q1 = html.indexOf("\"", a);
+      int q2 = html.indexOf("\"", q1 + 1);
+
+      if (q1 > 0 && q2 > q1)
+      {
+        action = html.substring(q1 + 1, q2);
+      }
+    }
+  }
+
+  if (action.length() == 0)
+  {
+    Serial.println("OCMP: no form action found, posting to portal origin");
+    action = portalOrigin + "/";
+  }
+  else
+  {
+    action = resolveUrl(currentUrl, action);
+  }
+
+  Serial.println("OCMP resolved action:");
+  Serial.println(action);
+
+  int inputCount = 0;
+
+  int pos = 0;
+  while (true)
+  {
+    int inputStart = lowerHtml.indexOf("<input", pos);
+    if (inputStart < 0) break;
+
+    int inputEnd = lowerHtml.indexOf('>', inputStart);
+    if (inputEnd < 0) break;
+
+    String inputTag = html.substring(inputStart, inputEnd + 1);
+    String name = getHtmlAttr(inputTag, "name");
+    String type = getHtmlAttr(inputTag, "type");
+    type.toLowerCase();
+
+    if (name.length() && type != "button" && type != "reset")
+    {
+      inputCount++;
+    }
+
+    pos = inputEnd + 1;
+  }
+
+  Serial.printf("OCMP parsed input fields: %d\n", inputCount);
+
+  String redir = getQueryParam(currentUrl, "redirurl");
+  if (redir.length() == 0)
+  {
+    redir = "http://www.msftconnecttest.com/connecttest.txt";
+  }
+  else if (!redir.startsWith("http"))
+  {
+    redir = "http://" + redir;
+  }
+
+  String postData = "redirurl=" + urlEncode(redir);
+  postData += "&accept=Continue";
+
+  Serial.println("OCMP POST:");
+  Serial.println(postData);
+
+  if (cookieJar.length() == 0)
+  {
+    Serial.println("OCMP: no session cookie -> forcing retry of splash page");
+
+    WiFiClient plainClient;
+    WiFiClientSecure secureClient;
+    HTTPClient h;
+    const char *headerKeys[] = {"Set-Cookie", "Location", "Content-Type", "Server"};
+
+    h.setConnectTimeout(8000);
+    h.setTimeout(8000);
+    h.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+    if (httpBeginForUrl(h, plainClient, secureClient, currentUrl))
+    {
+      h.collectHeaders(headerKeys, 4);
+      int retryCode = h.GET();
+
+      String sc = h.header("Set-Cookie");
+      String retryLocation = h.header("Location");
+      String retryContentType = h.header("Content-Type");
+      String retryServer = h.header("Server");
+
+      Serial.printf("OCMP cookie retry GET result: %d\n", retryCode);
+      Serial.print("OCMP cookie retry Content-Type: ");
+      Serial.println(retryContentType);
+      Serial.print("OCMP cookie retry Server: ");
+      Serial.println(retryServer);
+      if (retryLocation.length())
+      {
+        Serial.println("OCMP cookie retry Location:");
+        Serial.println(resolveUrl(currentUrl, retryLocation));
+      }
+      else
+      {
+        Serial.println("OCMP cookie retry Location: <none>");
+      }
+
+      if (sc.length())
+      {
+        storeSetCookieInJar(cookieJar, sc);
+        Serial.println("OCMP: cookie recovered on retry");
+      }
+      else
+      {
+        Serial.println("OCMP: cookie retry still had no Set-Cookie");
+      }
+
+      h.end();
+    }
+  }
+
+  Serial.println("COOKIE DUMP:");
+  Serial.println(cookieJar);
+
+  String actions[2] = {
+    action,
+    currentUrl
+  };
+
+  for (byte i = 0; i < 2; i++)
+  {
+    if (actions[i].length() == 0)
+    {
+      continue;
+    }
+
+    bool alreadyTried = false;
+    for (byte j = 0; j < i; j++)
+    {
+      if (actions[i] == actions[j])
+      {
+        alreadyTried = true;
+        break;
+      }
+    }
+
+    if (alreadyTried)
+    {
+      continue;
+    }
+
+    Serial.println("OCMP action:");
+    Serial.println(actions[i]);
+
+    if (postOCMPAccept(actions[i], currentUrl, postData, cookieJar))
+    {
+      Serial.println("OCMP authentication SUCCESS");
+      return true;
+    }
+  }
+
+  Serial.println("OCMP authentication failed (still blocked)");
+  return false;
+}
+
+static bool handleMeraki(const String &url)
+{
+  Serial.println("Meraki authentication...");
+
+  if (url.length() == 0)
+  {
+    Serial.println("No Meraki URL");
+    return false;
+  }
+
+  String grantUrl = discoverMerakiGrantUrl();
+  if (grantUrl.length())
+  {
+    return callCaptiveGrantUrl(grantUrl, captiveSplashUrl);
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.setConnectTimeout(15000);
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+  if (!http.begin(client, url))
+  {
+    Serial.println("Meraki begin failed.");
+    return false;
+  }
+
+  int code = http.GET();
+
+  if (code != HTTP_CODE_OK)
+  {
+    Serial.printf("Meraki failed: %d\n", code);
+    http.end();
+    return false;
+  }
+
+  http.getString();
+  http.end();
+
+  return internetIsOpen();
+}
+
+static bool ensureCaptivePortalAuthenticated(const String &url)
+{
   if (internetIsOpen())
   {
-    Serial.println("Captive portal authentication succeeded.");
+    Serial.println("Already online");
     return true;
   }
 
-  Serial.println("Grant request completed, but internet probe still failed.");
-  return false;
+  Serial.println("Captive portal detected");
+  Serial.println("URL:");
+  Serial.println(url);
+
+  captiveUrl = url;
+
+  if (isOCMP(url))
+  {
+    Serial.println("OCMP detected -> handling OCMP flow");
+    return handleOCMP(url);
+  }
+
+  Serial.println("Assuming Meraki flow");
+  return handleMeraki(url);
 }
 
 // ##########################################################################################
@@ -1071,18 +1703,42 @@ void connect2wifi()
 
       if (status == WL_CONNECTED)
       {
-        Serial.println("\nWiFi associated.");
-        Serial.println("local IP: " + WiFi.localIP().toString());
+        Serial.println("\nWiFi associated");
+        Serial.println(WiFi.localIP());
 
-        if (!ensureCaptivePortalAuthenticated())
+        WiFiClient client;
+        HTTPClient http;
+        const char *headerKeys[] = {"Location"};
+
+        http.setConnectTimeout(8000);
+        http.setTimeout(8000);
+        http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+
+        String redirect = "";
+        if (http.begin(client, ONLINE_TEST_URL))
         {
-          Serial.println("WiFi associated, but captive portal authentication failed.");
+          http.collectHeaders(headerKeys, 1);
+          http.GET();
+          redirect = http.header("Location");
+          http.end();
+        }
+        else
+        {
+          Serial.println("Captive redirect probe begin failed.");
+        }
+
+        Serial.println("Redirect:");
+        Serial.println(redirect);
+
+        if (!ensureCaptivePortalAuthenticated(redirect))
+        {
+          Serial.println("Captive auth failed");
           auth_failed = true;
           break;
         }
 
         int wifi_signal = WiFi.RSSI();
-        Serial.println("\nWiFi connected + captive portal authenticated!" +
+        Serial.println("\nAUTH SUCCESS" +
                        String("\nlocal IP: ") + WiFi.localIP().toString() +
                        String("\nstrength: ") + String(wifi_signal) + " dBm");
         return; // success
