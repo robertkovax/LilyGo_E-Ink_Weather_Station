@@ -166,12 +166,18 @@ void load_config()
 String html_input(const char *name, const String &value, bool isPassword = false, const char *label = nullptr, const char *note = nullptr)
 {
   String displayLabel = label ? String(label) : String(name);
+  String inputValue = isPassword ? (value.length() > 0 ? "****" : "") : value;
   String input = "<form class='field-form' action='/save' method='POST'>";
   input += "<span class='field-label'>" + displayLabel + ":</span>";
   input += "<div class='field-row'>";
   input += "<input type='";
   input += (isPassword ? "password" : "text");
-  input += "' name='" + String(name) + "' value='" + (isPassword ? "****" : value) + "' data-original='" + value + "' oninput='detectChange(this)'>";
+  input += "' name='" + String(name) + "' value='" + inputValue + "' data-original='" + inputValue + "' oninput='detectChange(this)'";
+  if (isPassword)
+  {
+    input += " autocomplete='new-password'";
+  }
+  input += ">";
   input += "<button type='submit' name='update' value='" + String(name) + "'>Save field</button>";
   input += "</div>";
   if (note)
@@ -314,13 +320,23 @@ const char *wifi_form_html_template = R"rawliteral(
           btn._changed = false;
           var input = form.querySelector('input');
           if (input) {
-            input.setAttribute('data-original', input.value);
+            if (input.type === 'password') {
+              if (input.value.length > 0) {
+                input.value = '****';
+              }
+              input.setAttribute('data-original', input.value);
+            } else {
+              input.setAttribute('data-original', input.value);
+            }
           }
         }
       };
       var input = form.querySelector('input');
       var data = '';
       if (input) {
+        if (input.type === 'password' && input.value === input.getAttribute('data-original')) {
+          return false;
+        }
         data = encodeURIComponent(input.name) + '=' + encodeURIComponent(input.value) + '&update=' + encodeURIComponent(input.name);
       }
       xhr.send(data);
@@ -436,9 +452,10 @@ void handle_wifi_root()
   String form = "";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>WiFi</legend>";
   String ssid_val = eeprom_read_string(SSID_ADDR, sizeof(ssid));
+  String pass_val = eeprom_read_string(PASS_ADDR, sizeof(password));
   String mac_str = eeprom_read_string(MAC_ADDR, sizeof(MAC));
   form += html_input("ssid", ssid_val, false, nullptr, nullptr);
-  form += html_input("pass", "", true, nullptr, nullptr);
+  form += html_input("pass", pass_val, true, nullptr, nullptr);
   form += html_input("MAC address", mac_str, false, "MAC address", "e.g. 96:e1:33:e9:02:f4, (default / empty = hardware MAC)");
   form += "</fieldset>";
   form += "<fieldset style='margin-bottom:40px;'><legend style='font-size:1.2em;font-weight:bold;'>Location</legend>";

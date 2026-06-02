@@ -47,7 +47,7 @@
 #include "wifi_connection.h"
 
 const uint8_t fw_version_major = 2;
-const uint8_t fw_version_minor = 2;
+const uint8_t fw_version_minor = 3;
 
 // ################ DISPLAY Lilygo TTGO T5 V2.3_2.13 #######################################
 // https://github.com/lewisxhe/TTGO-EPaper-Series#board-pins
